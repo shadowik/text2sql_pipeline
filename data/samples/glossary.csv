@@ -1,0 +1,41 @@
+term,korean_name,description,category
+customer,고객,서비스를 이용하거나 상품을 구매하는 개인 또는 법인,비즈니스
+customer_id,고객ID,고객을 고유하게 식별하는 식별자,식별자
+customer_name,고객명,고객의 이름 또는 법인명,기본정보
+order,주문,고객이 상품이나 서비스를 요청하는 거래,비즈니스
+order_id,주문ID,주문을 고유하게 식별하는 식별자,식별자
+order_date,주문일자,주문이 생성된 날짜,일시
+total_amount,총금액,주문의 총 결제 금액,금액
+product,상품,판매 또는 제공되는 물품이나 서비스,비즈니스
+product_id,상품ID,상품을 고유하게 식별하는 식별자,식별자
+product_name,상품명,상품의 이름,기본정보
+category,카테고리,상품이나 서비스의 분류 그룹,분류
+price,가격,상품의 판매 가격,금액
+stock_quantity,재고수량,현재 보유 중인 상품의 수량,수량
+employee,직원,회사에 소속되어 근무하는 사람,인사
+employee_id,직원ID,직원을 고유하게 식별하는 식별자,식별자
+department,부서,조직 내에서 업무 기능별로 구분된 단위,조직
+department_id,부서ID,부서를 고유하게 식별하는 식별자,식별자
+department_name,부서명,부서의 이름,기본정보
+salary,급여,직원에게 지급되는 보수,금액
+hire_date,입사일자,직원이 회사에 입사한 날짜,일시
+invoice,청구서,상품이나 서비스에 대한 대금 청구 문서,재무
+invoice_id,청구서ID,청구서를 고유하게 식별하는 식별자,식별자
+invoice_date,청구일자,청구서가 발행된 날짜,일시
+due_date,납부기한,대금을 납부해야 하는 마감 날짜,일시
+amount,금액,거래나 청구의 금액,금액
+status,상태,업무나 거래의 현재 진행 상태,상태
+warehouse,창고,상품을 보관하는 시설,시설
+warehouse_id,창고ID,창고를 고유하게 식별하는 식별자,식별자
+warehouse_name,창고명,창고의 이름,기본정보
+quantity,수량,상품이나 물품의 개수,수량
+account,계좌,금융 거래를 위한 계정,재무
+account_id,계좌ID,계좌를 고유하게 식별하는 식별자,식별자
+account_number,계좌번호,계좌의 고유 번호,식별자
+transaction,거래,금융적 가치 교환 행위,재무
+transaction_date,거래일자,거래가 발생한 날짜,일시
+transaction_type,거래유형,입금/출금/이체 등 거래의 종류,분류
+region,지역,영업이나 관리를 위해 구분된 지리적 범위,분류
+sales_amount,매출액,판매로 인해 발생한 수익,금액
+fiscal_year,회계연도,재무 회계 기준 연도,일시
+revenue,수익,사업 활동으로 얻은 총수입,금액

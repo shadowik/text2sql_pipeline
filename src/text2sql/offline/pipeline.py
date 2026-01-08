@@ -2,9 +2,37 @@
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import Any
+from enum import Enum
+from typing import Any, Callable, Optional
 
 from text2sql.core.models import RawSQLLog, NormalizedSQL, SQLTemplate
+
+
+class PipelineStage(Enum):
+    """파이프라인 단계."""
+
+    COLLECTING = "collecting"
+    FILTERING = "filtering"
+    NORMALIZING = "normalizing"
+    GENERATING_DESC = "generating_desc"
+    INDEXING_VECTOR = "indexing_vector"
+    INDEXING_ES = "indexing_es"
+    COMPLETED = "completed"
+
+
+@dataclass
+class ProgressInfo:
+    """진행 상황 정보."""
+
+    stage: PipelineStage
+    current: int = 0
+    total: int = 0
+    message: str = ""
+    sql_id: str = ""
+
+
+# 진행 상황 콜백 타입
+ProgressCallback = Callable[[ProgressInfo], None]
 
 
 @dataclass
@@ -59,6 +87,7 @@ class OfflinePipeline:
         description_generator: Any,
         vector_indexer: Any,
         es_indexer: Any,
+        progress_callback: Optional[ProgressCallback] = None,
     ) -> None:
         """파이프라인 초기화.
 
@@ -69,6 +98,7 @@ class OfflinePipeline:
             description_generator: 설명 생성기
             vector_indexer: 벡터 인덱서
             es_indexer: ES 인덱서
+            progress_callback: 진행 상황 콜백 함수
         """
         self._log_collector = log_collector
         self._log_filter = log_filter
@@ -76,6 +106,12 @@ class OfflinePipeline:
         self._description_generator = description_generator
         self._vector_indexer = vector_indexer
         self._es_indexer = es_indexer
+        self._progress_callback = progress_callback
+
+    def _notify_progress(self, info: ProgressInfo) -> None:
+        """진행 상황을 알림."""
+        if self._progress_callback:
+            self._progress_callback(info)
 
     def run(self) -> PipelineResult:
         """파이프라인을 실행.
@@ -86,10 +122,19 @@ class OfflinePipeline:
         result = PipelineResult()
 
         # 1. 로그 수집
+        self._notify_progress(ProgressInfo(
+            stage=PipelineStage.COLLECTING,
+            message="Oracle에서 SQL 로그 수집 중..."
+        ))
         raw_logs = self._log_collector.collect()
         result.collected_count = len(raw_logs)
 
         # 2. 로그 필터링
+        self._notify_progress(ProgressInfo(
+            stage=PipelineStage.FILTERING,
+            total=len(raw_logs),
+            message="SQL 로그 필터링 중..."
+        ))
         filtered_logs = self._log_filter.filter(raw_logs)
         result.filtered_count = len(filtered_logs)
 
@@ -97,11 +142,29 @@ class OfflinePipeline:
         templates = self._process_logs(filtered_logs, result)
         result.normalized_count = len(templates)
 
-        # 4. 인덱싱
+        # 4. 벡터 인덱싱
         if templates:
+            self._notify_progress(ProgressInfo(
+                stage=PipelineStage.INDEXING_VECTOR,
+                total=len(templates),
+                message="Milvus 벡터 인덱싱 중..."
+            ))
             self._vector_indexer.index_batch(templates)
+
+            # 5. ES 인덱싱
+            self._notify_progress(ProgressInfo(
+                stage=PipelineStage.INDEXING_ES,
+                total=len(templates),
+                message="Elasticsearch 인덱싱 중..."
+            ))
             self._es_indexer.index_batch(templates)
             result.indexed_count = len(templates)
+
+        # 완료
+        self._notify_progress(ProgressInfo(
+            stage=PipelineStage.COMPLETED,
+            message="파이프라인 완료!"
+        ))
 
         return result
 
@@ -118,10 +181,19 @@ class OfflinePipeline:
             SQL 템플릿 리스트
         """
         templates = []
+        total = len(logs)
 
-        for log in logs:
+        for idx, log in enumerate(logs):
             try:
-                # 정규화
+                # 정규화 진행 상황
+                self._notify_progress(ProgressInfo(
+                    stage=PipelineStage.NORMALIZING,
+                    current=idx + 1,
+                    total=total,
+                    message=f"SQL 정규화 중...",
+                    sql_id=log.sql_id,
+                ))
+
                 normalized_text = self._sql_normalizer.normalize_literals(log.sql_text)
                 tables = self._sql_normalizer.extract_tables(log.sql_text)
                 columns = self._sql_normalizer.extract_columns(log.sql_text)
@@ -129,7 +201,15 @@ class OfflinePipeline:
                 # 템플릿 해시 생성
                 template_hash = hashlib.md5(normalized_text.encode()).hexdigest()
 
-                # 설명 생성
+                # 설명 생성 진행 상황
+                self._notify_progress(ProgressInfo(
+                    stage=PipelineStage.GENERATING_DESC,
+                    current=idx + 1,
+                    total=total,
+                    message=f"LLM 설명 생성 중...",
+                    sql_id=log.sql_id,
+                ))
+
                 description = self._description_generator.generate(normalized_text)
 
                 template = SQLTemplate(

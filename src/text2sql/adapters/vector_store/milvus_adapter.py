@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pymilvus import Collection, utility
+from pymilvus import Collection, utility, connections
 
 from text2sql.core.config import Settings
 
@@ -17,6 +17,12 @@ class MilvusAdapter:
             settings: 애플리케이션 설정
         """
         self._settings = settings
+        # Milvus 연결 설정
+        connections.connect(
+            alias="default",
+            host=settings.milvus_host,
+            port=settings.milvus_port,
+        )
 
     def collection_exists(self, collection_name: str) -> bool:
         """컬렉션 존재 여부 확인.

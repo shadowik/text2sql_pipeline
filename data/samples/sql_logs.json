@@ -1,0 +1,162 @@
+[
+  {
+    "sql_id": "SQL001",
+    "sql_text": "SELECT customer_id, customer_name, email, phone FROM customers WHERE customer_id = 12345",
+    "exec_count": 15000,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL002",
+    "sql_text": "SELECT o.order_id, o.order_date, o.total_amount, c.customer_name FROM orders o INNER JOIN customers c ON o.customer_id = c.customer_id WHERE o.order_date >= TO_DATE('2025-01-01', 'YYYY-MM-DD') ORDER BY o.order_date DESC",
+    "exec_count": 8500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL003",
+    "sql_text": "SELECT product_id, product_name, category, price, stock_quantity FROM products WHERE category = 'ELECTRONICS' AND price > 100",
+    "exec_count": 12000,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "INVENTORY"
+  },
+  {
+    "sql_id": "SQL004",
+    "sql_text": "SELECT COUNT(*) as total_orders, SUM(total_amount) as revenue, AVG(total_amount) as avg_order FROM orders WHERE order_date BETWEEN TO_DATE('2025-01-01', 'YYYY-MM-DD') AND TO_DATE('2025-12-31', 'YYYY-MM-DD') GROUP BY TRUNC(order_date, 'MM')",
+    "exec_count": 5000,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL005",
+    "sql_text": "SELECT e.employee_id, e.first_name, e.last_name, d.department_name, e.salary FROM employees e LEFT JOIN departments d ON e.department_id = d.department_id WHERE e.hire_date >= TO_DATE('2024-01-01', 'YYYY-MM-DD')",
+    "exec_count": 3200,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "HR"
+  },
+  {
+    "sql_id": "SQL006",
+    "sql_text": "SELECT i.invoice_id, i.invoice_date, i.amount, c.customer_name FROM invoices i INNER JOIN customers c ON i.customer_id = c.customer_id WHERE i.status = 'PENDING' AND i.due_date < SYSDATE",
+    "exec_count": 7800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "FINANCE"
+  },
+  {
+    "sql_id": "SQL007",
+    "sql_text": "SELECT ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY salary DESC) as rank, employee_id, first_name, salary FROM employees WHERE status = 'ACTIVE'",
+    "exec_count": 2500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "HR"
+  },
+  {
+    "sql_id": "SQL008",
+    "sql_text": "SELECT p.product_name, SUM(oi.quantity) as total_sold, SUM(oi.quantity * oi.unit_price) as total_revenue FROM order_items oi INNER JOIN products p ON oi.product_id = p.product_id GROUP BY p.product_name ORDER BY total_sold DESC",
+    "exec_count": 4500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL009",
+    "sql_text": "SELECT customer_id, customer_name, city, country FROM customers WHERE country IN ('Korea', 'Japan', 'China') ORDER BY customer_name",
+    "exec_count": 6700,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL010",
+    "sql_text": "SELECT w.warehouse_id, w.warehouse_name, p.product_name, s.quantity FROM warehouses w INNER JOIN stock s ON w.warehouse_id = s.warehouse_id INNER JOIN products p ON s.product_id = p.product_id WHERE s.quantity < 100",
+    "exec_count": 3800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "INVENTORY"
+  },
+  {
+    "sql_id": "SQL011",
+    "sql_text": "INSERT INTO orders (order_id, customer_id, order_date, total_amount) VALUES (12345, 100, SYSDATE, 999.99)",
+    "exec_count": 10000,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL012",
+    "sql_text": "UPDATE customers SET last_login = SYSDATE WHERE customer_id = 100",
+    "exec_count": 9500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL013",
+    "sql_text": "DELETE FROM temp_sessions WHERE created_at < SYSDATE - 7",
+    "exec_count": 500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SYSTEM"
+  },
+  {
+    "sql_id": "SQL014",
+    "sql_text": "CREATE TABLE temp_report_20260108 AS SELECT * FROM orders WHERE order_date = SYSDATE",
+    "exec_count": 10,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SYSTEM"
+  },
+  {
+    "sql_id": "SQL015",
+    "sql_text": "SELECT * FROM SYS.DBA_TABLES WHERE owner = 'SALES'",
+    "exec_count": 200,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SYSTEM"
+  },
+  {
+    "sql_id": "SQL016",
+    "sql_text": "SELECT * FROM products WHERE product_id = 999",
+    "exec_count": 800,
+    "error_count": 5,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "INVENTORY"
+  },
+  {
+    "sql_id": "SQL017",
+    "sql_text": "SELECT DISTINCT category FROM products ORDER BY category",
+    "exec_count": 11000,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "INVENTORY"
+  },
+  {
+    "sql_id": "SQL018",
+    "sql_text": "SELECT c.customer_id, c.customer_name, (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.customer_id) as order_count FROM customers c WHERE c.status = 'ACTIVE'",
+    "exec_count": 2800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  },
+  {
+    "sql_id": "SQL019",
+    "sql_text": "SELECT a.account_id, a.account_number, t.transaction_date, t.amount, t.transaction_type FROM accounts a INNER JOIN transactions t ON a.account_id = t.account_id WHERE t.transaction_date >= TO_DATE('2025-12-01', 'YYYY-MM-DD') AND t.amount > 10000",
+    "exec_count": 4200,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "FINANCE"
+  },
+  {
+    "sql_id": "SQL020",
+    "sql_text": "SELECT region, SUM(sales_amount) as total_sales, RANK() OVER (ORDER BY SUM(sales_amount) DESC) as sales_rank FROM regional_sales WHERE fiscal_year = 2025 GROUP BY region",
+    "exec_count": 1800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "SALES"
+  }
+]

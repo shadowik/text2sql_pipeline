@@ -26,11 +26,12 @@ class OracleAdapter:
         Returns:
             데이터베이스 연결 객체
         """
-        dsn = f"{self._settings.oracle_host}:{self._settings.oracle_port}/{self._settings.oracle_service_name}"
         self._connection = oracledb.connect(
             user=self._settings.oracle_user,
             password=self._settings.oracle_password,
-            dsn=dsn,
+            host=self._settings.oracle_host,
+            port=self._settings.oracle_port,
+            service_name=self._settings.oracle_service_name,
         )
         return self._connection
 
@@ -69,11 +70,12 @@ class OracleAdapter:
         Returns:
             연결 풀 객체
         """
-        dsn = f"{self._settings.oracle_host}:{self._settings.oracle_port}/{self._settings.oracle_service_name}"
         self._pool = oracledb.create_pool(
             user=self._settings.oracle_user,
             password=self._settings.oracle_password,
-            dsn=dsn,
+            host=self._settings.oracle_host,
+            port=self._settings.oracle_port,
+            service_name=self._settings.oracle_service_name,
             min=min_connections,
             max=max_connections,
         )

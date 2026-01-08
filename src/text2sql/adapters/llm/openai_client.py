@@ -1,4 +1,4 @@
-"""OpenAI LLM 클라이언트."""
+"""OpenAI 호환 LLM 클라이언트 (LM Studio 등 지원)."""
 
 from typing import Any, Iterator
 
@@ -20,7 +20,7 @@ class TimeoutError(Exception):
 
 
 class OpenAIClient:
-    """OpenAI LLM 클라이언트."""
+    """OpenAI 호환 LLM 클라이언트 (LM Studio 등 지원)."""
 
     def __init__(self, settings: Settings) -> None:
         """클라이언트 초기화.
@@ -30,8 +30,9 @@ class OpenAIClient:
         """
         self._settings = settings
         self._llm: Any = ChatOpenAI(
-            api_key=settings.openai_api_key,
-            model=settings.openai_model,
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            model=settings.llm_model,
         )
 
     def invoke(self, message: str) -> str:

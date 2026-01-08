@@ -15,13 +15,15 @@ class LogCollector:
         ORDER BY EXEC_COUNT DESC
     """
 
-    def __init__(self, oracle_adapter: Any) -> None:
+    def __init__(self, oracle_adapter: Any, limit: int | None = None) -> None:
         """수집기 초기화.
 
         Args:
             oracle_adapter: Oracle 어댑터
+            limit: 기본 최대 레코드 수 (None이면 제한 없음)
         """
         self._oracle_adapter = oracle_adapter
+        self._default_limit = limit
 
     def collect(
         self,
@@ -34,12 +36,13 @@ class LogCollector:
         Args:
             start_date: 시작 날짜 (None이면 제한 없음)
             end_date: 종료 날짜 (None이면 제한 없음)
-            limit: 최대 레코드 수 (None이면 제한 없음)
+            limit: 최대 레코드 수 (None이면 기본값 사용)
 
         Returns:
             수집된 SQL 로그 리스트
         """
-        query = self._build_query(start_date, end_date, limit)
+        effective_limit = limit if limit is not None else self._default_limit
+        query = self._build_query(start_date, end_date, effective_limit)
         rows = self._oracle_adapter.execute_query(query)
 
         return [
