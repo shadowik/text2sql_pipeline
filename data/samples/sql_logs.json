@@ -1,162 +1,242 @@
 [
   {
     "sql_id": "SQL001",
-    "sql_text": "SELECT customer_id, customer_name, email, phone FROM customers WHERE customer_id = 12345",
+    "sql_text": "SELECT lot_id, wafer_id, yield_rate, defect_cnt, create_dt FROM MES_PRD_YIELD_M10 WHERE lot_id = 'LOT20260108001' AND create_dt >= TO_DATE('2026-01-01', 'YYYY-MM-DD')",
     "exec_count": 15000,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL002",
-    "sql_text": "SELECT o.order_id, o.order_date, o.total_amount, c.customer_name FROM orders o INNER JOIN customers c ON o.customer_id = c.customer_id WHERE o.order_date >= TO_DATE('2025-01-01', 'YYYY-MM-DD') ORDER BY o.order_date DESC",
-    "exec_count": 8500,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
-  },
-  {
-    "sql_id": "SQL003",
-    "sql_text": "SELECT product_id, product_name, category, price, stock_quantity FROM products WHERE category = 'ELECTRONICS' AND price > 100",
+    "sql_text": "SELECT l.lot_id, l.fab_id, l.hold_code, l.hold_reason, l.create_dt, e.eqp_name FROM MES_BIZ_LOTHOLD_INF_M11 l LEFT JOIN MES_EQP_MST_M11 e ON l.eqp_id = e.eqp_id WHERE l.hold_code IS NOT NULL AND l.create_dt >= TO_DATE('2026-01-01', 'YYYY-MM-DD') ORDER BY l.create_dt DESC",
     "exec_count": 12000,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "INVENTORY"
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL003",
+    "sql_text": "SELECT eqp_id, eqp_name, eqp_type, chamber_cnt, status FROM MES_EQP_MST_M14 WHERE eqp_type = 'PHOTO' AND status = 'RUN'",
+    "exec_count": 8500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL004",
-    "sql_text": "SELECT COUNT(*) as total_orders, SUM(total_amount) as revenue, AVG(total_amount) as avg_order FROM orders WHERE order_date BETWEEN TO_DATE('2025-01-01', 'YYYY-MM-DD') AND TO_DATE('2025-12-31', 'YYYY-MM-DD') GROUP BY TRUNC(order_date, 'MM')",
-    "exec_count": 5000,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
-  },
-  {
-    "sql_id": "SQL005",
-    "sql_text": "SELECT e.employee_id, e.first_name, e.last_name, d.department_name, e.salary FROM employees e LEFT JOIN departments d ON e.department_id = d.department_id WHERE e.hire_date >= TO_DATE('2024-01-01', 'YYYY-MM-DD')",
-    "exec_count": 3200,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "HR"
-  },
-  {
-    "sql_id": "SQL006",
-    "sql_text": "SELECT i.invoice_id, i.invoice_date, i.amount, c.customer_name FROM invoices i INNER JOIN customers c ON i.customer_id = c.customer_id WHERE i.status = 'PENDING' AND i.due_date < SYSDATE",
-    "exec_count": 7800,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "FINANCE"
-  },
-  {
-    "sql_id": "SQL007",
-    "sql_text": "SELECT ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY salary DESC) as rank, employee_id, first_name, salary FROM employees WHERE status = 'ACTIVE'",
-    "exec_count": 2500,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "HR"
-  },
-  {
-    "sql_id": "SQL008",
-    "sql_text": "SELECT p.product_name, SUM(oi.quantity) as total_sold, SUM(oi.quantity * oi.unit_price) as total_revenue FROM order_items oi INNER JOIN products p ON oi.product_id = p.product_id GROUP BY p.product_name ORDER BY total_sold DESC",
-    "exec_count": 4500,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
-  },
-  {
-    "sql_id": "SQL009",
-    "sql_text": "SELECT customer_id, customer_name, city, country FROM customers WHERE country IN ('Korea', 'Japan', 'China') ORDER BY customer_name",
-    "exec_count": 6700,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
-  },
-  {
-    "sql_id": "SQL010",
-    "sql_text": "SELECT w.warehouse_id, w.warehouse_name, p.product_name, s.quantity FROM warehouses w INNER JOIN stock s ON w.warehouse_id = s.warehouse_id INNER JOIN products p ON s.product_id = p.product_id WHERE s.quantity < 100",
-    "exec_count": 3800,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "INVENTORY"
-  },
-  {
-    "sql_id": "SQL011",
-    "sql_text": "INSERT INTO orders (order_id, customer_id, order_date, total_amount) VALUES (12345, 100, SYSDATE, 999.99)",
-    "exec_count": 10000,
-    "error_count": 0,
-    "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
-  },
-  {
-    "sql_id": "SQL012",
-    "sql_text": "UPDATE customers SET last_login = SYSDATE WHERE customer_id = 100",
+    "sql_text": "SELECT TRUNC(create_dt, 'DD') as prd_date, COUNT(*) as lot_cnt, AVG(yield_rate) as avg_yield, SUM(good_die_cnt) as total_good_die FROM MES_PRD_YIELD_M11 WHERE create_dt BETWEEN TO_DATE('2026-01-01', 'YYYY-MM-DD') AND TO_DATE('2026-01-31', 'YYYY-MM-DD') GROUP BY TRUNC(create_dt, 'DD') ORDER BY prd_date",
     "exec_count": 9500,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL005",
+    "sql_text": "SELECT p.proc_id, p.proc_name, COUNT(t.lot_id) as throughput, AVG(t.cycle_time) as avg_cycle_time FROM MES_PROC_MST_M16 p INNER JOIN MES_TRK_HIS_M16 t ON p.proc_id = t.proc_id WHERE t.track_out_dt >= TO_DATE('2026-01-07', 'YYYY-MM-DD') GROUP BY p.proc_id, p.proc_name ORDER BY throughput DESC",
+    "exec_count": 7200,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL006",
+    "sql_text": "SELECT lot_id, fab_id, create_dt, yield_rate FROM MES_PRD_M10 WHERE create_dt >= :start_date AND create_dt < :end_date UNION ALL SELECT lot_id, fab_id, create_dt, yield_rate FROM MES_PRD_M11 WHERE create_dt >= :start_date AND create_dt < :end_date UNION ALL SELECT lot_id, fab_id, create_dt, yield_rate FROM MES_PRD_M14 WHERE create_dt >= :start_date AND create_dt < :end_date",
+    "exec_count": 6800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL007",
+    "sql_text": "SELECT defect_code, COUNT(*) as defect_cnt, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as defect_pct FROM MES_DEF_HIS_M10 WHERE create_dt >= TO_DATE('2026-01-01', 'YYYY-MM-DD') GROUP BY defect_code ORDER BY defect_cnt DESC",
+    "exec_count": 5500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL008",
+    "sql_text": "SELECT ROW_NUMBER() OVER (PARTITION BY fab_id ORDER BY yield_rate DESC) as rank, lot_id, fab_id, yield_rate, product_id FROM MES_PRD_YIELD_M11 WHERE create_dt >= TO_DATE('2026-01-01', 'YYYY-MM-DD') AND yield_rate IS NOT NULL",
+    "exec_count": 4800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL009",
+    "sql_text": "SELECT w.lot_id, w.wafer_id, w.bin_code, w.good_die_cnt, w.total_die_cnt, l.product_name FROM MES_WFR_BIN_ICWT w INNER JOIN MES_LOT_MST_ICWT l ON w.lot_id = l.lot_id WHERE w.bin_code IN ('PASS', 'FAIL') AND w.create_dt >= SYSDATE - 7",
+    "exec_count": 6200,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL010",
+    "sql_text": "SELECT e.eqp_id, e.eqp_name, SUM(CASE WHEN d.status = 'DOWN' THEN d.duration ELSE 0 END) as downtime_min, COUNT(CASE WHEN d.status = 'DOWN' THEN 1 END) as down_cnt FROM MES_EQP_MST_M15 e LEFT JOIN MES_EQP_DOWN_M15 d ON e.eqp_id = d.eqp_id WHERE d.create_dt >= TO_DATE('2026-01-01', 'YYYY-MM-DD') GROUP BY e.eqp_id, e.eqp_name ORDER BY downtime_min DESC",
+    "exec_count": 4200,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL011",
+    "sql_text": "INSERT INTO MES_TRK_HIS_M10 (lot_id, wafer_id, eqp_id, proc_id, track_in_dt, track_out_dt, status) VALUES ('LOT20260108001', 'WFR001', 'EQP_PHOTO_01', 'PROC001', SYSDATE, NULL, 'RUN')",
+    "exec_count": 25000,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL012",
+    "sql_text": "UPDATE MES_LOT_STS_M11 SET status = 'HOLD', hold_code = 'QC001', hold_reason = '품질검사 대기', update_dt = SYSDATE WHERE lot_id = 'LOT20260108002'",
+    "exec_count": 8000,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL013",
-    "sql_text": "DELETE FROM temp_sessions WHERE created_at < SYSDATE - 7",
-    "exec_count": 500,
+    "sql_text": "DELETE FROM MES_TMP_WIP_M14 WHERE create_dt < SYSDATE - 30",
+    "exec_count": 100,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SYSTEM"
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL014",
-    "sql_text": "CREATE TABLE temp_report_20260108 AS SELECT * FROM orders WHERE order_date = SYSDATE",
-    "exec_count": 10,
+    "sql_text": "CREATE TABLE MES_RPT_DAILY_20260108 AS SELECT * FROM MES_PRD_YIELD_M10 WHERE create_dt = TO_DATE('2026-01-08', 'YYYY-MM-DD')",
+    "exec_count": 5,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SYSTEM"
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL015",
-    "sql_text": "SELECT * FROM SYS.DBA_TABLES WHERE owner = 'SALES'",
-    "exec_count": 200,
+    "sql_text": "SELECT * FROM SYS.DBA_TABLES WHERE owner = 'MES'",
+    "exec_count": 150,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
     "schema_name": "SYSTEM"
   },
   {
     "sql_id": "SQL016",
-    "sql_text": "SELECT * FROM products WHERE product_id = 999",
-    "exec_count": 800,
-    "error_count": 5,
+    "sql_text": "SELECT * FROM MES_WFR_HIS_M10 WHERE wafer_id = 'INVALID_ID'",
+    "exec_count": 500,
+    "error_count": 10,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "INVENTORY"
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL017",
-    "sql_text": "SELECT DISTINCT category FROM products ORDER BY category",
-    "exec_count": 11000,
+    "sql_text": "SELECT DISTINCT product_id, product_name FROM MES_PRD_MST_M11 WHERE status = 'ACTIVE' ORDER BY product_name",
+    "exec_count": 11500,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "INVENTORY"
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL018",
-    "sql_text": "SELECT c.customer_id, c.customer_name, (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.customer_id) as order_count FROM customers c WHERE c.status = 'ACTIVE'",
-    "exec_count": 2800,
+    "sql_text": "SELECT l.lot_id, l.product_id, (SELECT AVG(yield_rate) FROM MES_PRD_YIELD_M14 y WHERE y.lot_id = l.lot_id) as avg_yield, l.wip_qty FROM MES_LOT_MST_M14 l WHERE l.status = 'WIP'",
+    "exec_count": 3800,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL019",
-    "sql_text": "SELECT a.account_id, a.account_number, t.transaction_date, t.amount, t.transaction_type FROM accounts a INNER JOIN transactions t ON a.account_id = t.account_id WHERE t.transaction_date >= TO_DATE('2025-12-01', 'YYYY-MM-DD') AND t.amount > 10000",
-    "exec_count": 4200,
+    "sql_text": "SELECT r.recipe_id, r.recipe_name, e.eqp_name, t.lot_cnt, t.avg_yield FROM MES_RCP_MST_M10 r INNER JOIN MES_EQP_MST_M10 e ON r.eqp_id = e.eqp_id INNER JOIN (SELECT recipe_id, COUNT(*) as lot_cnt, AVG(yield_rate) as avg_yield FROM MES_TRK_HIS_M10 GROUP BY recipe_id) t ON r.recipe_id = t.recipe_id WHERE t.avg_yield > 95",
+    "exec_count": 3200,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "FINANCE"
+    "schema_name": "MES"
   },
   {
     "sql_id": "SQL020",
-    "sql_text": "SELECT region, SUM(sales_amount) as total_sales, RANK() OVER (ORDER BY SUM(sales_amount) DESC) as sales_rank FROM regional_sales WHERE fiscal_year = 2025 GROUP BY region",
-    "exec_count": 1800,
+    "sql_text": "SELECT fab_id, SUM(yield_rate * wip_qty) / SUM(wip_qty) as weighted_yield, RANK() OVER (ORDER BY SUM(yield_rate * wip_qty) / SUM(wip_qty) DESC) as yield_rank FROM MES_PRD_SUMMARY_M11 WHERE create_dt >= TO_DATE('2026-01-01', 'YYYY-MM-DD') GROUP BY fab_id",
+    "exec_count": 2800,
     "error_count": 0,
     "collected_at": "2026-01-08T10:00:00",
-    "schema_name": "SALES"
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL021",
+    "sql_text": "SELECT shift, operator_id, COUNT(lot_id) as processed_lot_cnt, AVG(cycle_time) as avg_cycle FROM MES_TRK_HIS_M16 WHERE track_out_dt BETWEEN TO_DATE('2026-01-08 00:00:00', 'YYYY-MM-DD HH24:MI:SS') AND TO_DATE('2026-01-08 23:59:59', 'YYYY-MM-DD HH24:MI:SS') GROUP BY shift, operator_id ORDER BY shift, processed_lot_cnt DESC",
+    "exec_count": 4500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL022",
+    "sql_text": "SELECT p.proc_name, m.metrology_value, m.spec_min, m.spec_max, CASE WHEN m.metrology_value BETWEEN m.spec_min AND m.spec_max THEN 'PASS' ELSE 'FAIL' END as judge FROM MES_METRO_HIS_CJPNT m INNER JOIN MES_PROC_MST_CJPNT p ON m.proc_id = p.proc_id WHERE m.create_dt >= SYSDATE - 1",
+    "exec_count": 5800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL023",
+    "sql_text": "SELECT lot_id, wafer_id, layer, insp_type, defect_cnt, defect_density FROM MES_INSP_HIS_M10 WHERE defect_cnt > 0 AND create_dt >= TO_DATE('2026-01-07', 'YYYY-MM-DD') ORDER BY defect_cnt DESC FETCH FIRST 100 ROWS ONLY",
+    "exec_count": 6500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL024",
+    "sql_text": "SELECT eqp_id, eqp_type, SUM(run_time) as total_run_time, SUM(idle_time) as total_idle_time, ROUND(SUM(run_time) * 100 / (SUM(run_time) + SUM(idle_time)), 2) as utilization FROM MES_EQP_UTIL_M11 WHERE create_dt >= TRUNC(SYSDATE, 'MM') GROUP BY eqp_id, eqp_type HAVING SUM(run_time) + SUM(idle_time) > 0",
+    "exec_count": 3500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL025",
+    "sql_text": "SELECT c.carrier_id, c.carrier_type, l.lot_id, l.wafer_cnt, l.current_proc FROM MES_CARRIER_MST_M14 c LEFT JOIN MES_LOT_MST_M14 l ON c.carrier_id = l.carrier_id WHERE c.status = 'IN_USE'",
+    "exec_count": 7800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL026",
+    "sql_text": "SELECT product_id, product_name, device_type, die_size, layer_cnt FROM MES_PRD_MST_M10 WHERE device_type IN ('DDR5', 'HBM3', 'NAND') ORDER BY product_name",
+    "exec_count": 8200,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL027",
+    "sql_text": "SELECT lot_id, proc_id, step_id, wip_qty, queue_time, LAG(track_out_dt) OVER (PARTITION BY lot_id ORDER BY step_seq) as prev_track_out FROM MES_WIP_HIS_M15 WHERE create_dt >= SYSDATE - 3 ORDER BY lot_id, step_seq",
+    "exec_count": 4100,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL028",
+    "sql_text": "SELECT h.lot_id, h.hold_code, h.hold_reason, h.hold_dt, h.release_dt, ROUND((h.release_dt - h.hold_dt) * 24, 2) as hold_hours FROM MES_BIZ_LOTHOLD_INF_M10 h WHERE h.release_dt IS NOT NULL AND h.hold_dt >= TO_DATE('2026-01-01', 'YYYY-MM-DD')",
+    "exec_count": 3600,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL029",
+    "sql_text": "SELECT pm.pm_id, pm.eqp_id, pm.pm_type, pm.scheduled_dt, pm.completed_dt, pm.duration_min, e.eqp_name FROM MES_PM_HIS_M16 pm INNER JOIN MES_EQP_MST_M16 e ON pm.eqp_id = e.eqp_id WHERE pm.scheduled_dt BETWEEN SYSDATE AND SYSDATE + 7 ORDER BY pm.scheduled_dt",
+    "exec_count": 2500,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
+  },
+  {
+    "sql_id": "SQL030",
+    "sql_text": "SELECT fab_id, proc_name, AVG(yield_rate) as avg_yield, STDDEV(yield_rate) as yield_stddev, MIN(yield_rate) as min_yield, MAX(yield_rate) as max_yield FROM MES_PRD_YIELD_M11 y INNER JOIN MES_PROC_MST_M11 p ON y.proc_id = p.proc_id WHERE y.create_dt >= ADD_MONTHS(SYSDATE, -1) GROUP BY fab_id, proc_name HAVING COUNT(*) >= 100",
+    "exec_count": 4800,
+    "error_count": 0,
+    "collected_at": "2026-01-08T10:00:00",
+    "schema_name": "MES"
   }
 ]

@@ -1,41 +1,70 @@
 term,korean_name,description,category
-customer,고객,서비스를 이용하거나 상품을 구매하는 개인 또는 법인,비즈니스
-customer_id,고객ID,고객을 고유하게 식별하는 식별자,식별자
-customer_name,고객명,고객의 이름 또는 법인명,기본정보
-order,주문,고객이 상품이나 서비스를 요청하는 거래,비즈니스
-order_id,주문ID,주문을 고유하게 식별하는 식별자,식별자
-order_date,주문일자,주문이 생성된 날짜,일시
-total_amount,총금액,주문의 총 결제 금액,금액
-product,상품,판매 또는 제공되는 물품이나 서비스,비즈니스
-product_id,상품ID,상품을 고유하게 식별하는 식별자,식별자
-product_name,상품명,상품의 이름,기본정보
-category,카테고리,상품이나 서비스의 분류 그룹,분류
-price,가격,상품의 판매 가격,금액
-stock_quantity,재고수량,현재 보유 중인 상품의 수량,수량
-employee,직원,회사에 소속되어 근무하는 사람,인사
-employee_id,직원ID,직원을 고유하게 식별하는 식별자,식별자
-department,부서,조직 내에서 업무 기능별로 구분된 단위,조직
-department_id,부서ID,부서를 고유하게 식별하는 식별자,식별자
-department_name,부서명,부서의 이름,기본정보
-salary,급여,직원에게 지급되는 보수,금액
-hire_date,입사일자,직원이 회사에 입사한 날짜,일시
-invoice,청구서,상품이나 서비스에 대한 대금 청구 문서,재무
-invoice_id,청구서ID,청구서를 고유하게 식별하는 식별자,식별자
-invoice_date,청구일자,청구서가 발행된 날짜,일시
-due_date,납부기한,대금을 납부해야 하는 마감 날짜,일시
-amount,금액,거래나 청구의 금액,금액
-status,상태,업무나 거래의 현재 진행 상태,상태
-warehouse,창고,상품을 보관하는 시설,시설
-warehouse_id,창고ID,창고를 고유하게 식별하는 식별자,식별자
-warehouse_name,창고명,창고의 이름,기본정보
-quantity,수량,상품이나 물품의 개수,수량
-account,계좌,금융 거래를 위한 계정,재무
-account_id,계좌ID,계좌를 고유하게 식별하는 식별자,식별자
-account_number,계좌번호,계좌의 고유 번호,식별자
-transaction,거래,금융적 가치 교환 행위,재무
-transaction_date,거래일자,거래가 발생한 날짜,일시
-transaction_type,거래유형,입금/출금/이체 등 거래의 종류,분류
-region,지역,영업이나 관리를 위해 구분된 지리적 범위,분류
-sales_amount,매출액,판매로 인해 발생한 수익,금액
-fiscal_year,회계연도,재무 회계 기준 연도,일시
-revenue,수익,사업 활동으로 얻은 총수입,금액
+fab,팹,반도체 제조 공장(Fabrication의 약자)으로 웨이퍼 생산 라인 단위,시설
+fab_id,팹ID,팹을 고유하게 식별하는 코드 (예: M10/M11/M14/M15/M16),식별자
+site_id,사이트ID,생산 공장 위치 식별자 (IC:이천/CJ:청주/WX:우시),식별자
+wafer,웨이퍼,반도체 칩을 만드는 기판이 되는 얇은 원판형 실리콘,제품
+wafer_id,웨이퍼ID,웨이퍼를 고유하게 식별하는 식별자,식별자
+lot,로트,동일 조건으로 처리되는 웨이퍼 묶음 단위 (보통 25장),제품
+lot_id,로트ID,로트를 고유하게 식별하는 식별자,식별자
+yield,수율,생산된 제품 중 양품의 비율 (%),품질
+yield_rate,수율률,특정 공정 또는 제품의 양품 비율,품질
+defect,불량,제품의 품질 기준을 충족하지 못하는 결함,품질
+defect_rate,불량률,전체 생산 대비 불량품의 비율 (%),품질
+defect_code,불량코드,불량 유형을 분류하는 코드,품질
+equipment,설비,반도체 제조에 사용되는 장비,시설
+eqp_id,설비ID,설비를 고유하게 식별하는 식별자,식별자
+eqp_name,설비명,설비의 이름,기본정보
+eqp_type,설비유형,설비의 종류 (노광기/식각기/증착기 등),분류
+process,공정,반도체 제조의 각 단계별 작업,공정
+proc_id,공정ID,공정을 고유하게 식별하는 식별자,식별자
+proc_name,공정명,공정의 이름,기본정보
+step,스텝,공정 내 세부 단계,공정
+step_id,스텝ID,스텝을 고유하게 식별하는 식별자,식별자
+recipe,레시피,설비 운영을 위한 파라미터 설정 값 집합,공정
+recipe_id,레시피ID,레시피를 고유하게 식별하는 식별자,식별자
+chamber,챔버,설비 내 공정이 실제로 진행되는 반응 공간,시설
+chamber_id,챔버ID,챔버를 고유하게 식별하는 식별자,식별자
+carrier,캐리어,웨이퍼를 운반하는 용기 (FOUP),시설
+carrier_id,캐리어ID,캐리어를 고유하게 식별하는 식별자,식별자
+product,제품,생산되는 반도체 제품,제품
+product_id,제품ID,제품을 고유하게 식별하는 식별자,식별자
+product_name,제품명,제품의 이름 (예: DDR5/HBM3),기본정보
+device,디바이스,제조 중인 반도체 소자,제품
+device_id,디바이스ID,디바이스를 고유하게 식별하는 식별자,식별자
+bin,빈,테스트 결과에 따른 제품 분류 등급,품질
+bin_code,빈코드,빈 분류를 나타내는 코드,품질
+die,다이,웨이퍼에서 절단된 개별 칩,제품
+die_cnt,다이수,웨이퍼당 다이의 개수,수량
+good_die_cnt,양품다이수,양품으로 판정된 다이의 개수,수량
+hold,홀드,공정 진행을 일시 중단하는 상태,상태
+hold_code,홀드코드,홀드 사유를 나타내는 코드,상태
+hold_reason,홀드사유,공정이 중단된 이유,상태
+release,릴리스,홀드 상태 해제,상태
+wip,재공,Work In Process의 약자로 진행 중인 재고,상태
+wip_qty,재공수량,현재 공정 중인 로트/웨이퍼 수량,수량
+track_in,트랙인,설비에 로트가 진입하는 시점,일시
+track_out,트랙아웃,설비에서 로트가 나오는 시점,일시
+track_in_dt,트랙인일시,설비 진입 일시,일시
+track_out_dt,트랙아웃일시,설비 완료 일시,일시
+cycle_time,사이클타임,공정 시작부터 완료까지 소요 시간,일시
+tact_time,택트타임,설비에서 제품 하나 처리에 걸리는 시간,일시
+throughput,처리량,단위 시간당 처리된 제품 수량,수량
+utilization,가동률,설비의 실제 가동 시간 비율,품질
+downtime,다운타임,설비 중단 시간,일시
+pm,예방정비,Preventive Maintenance의 약자로 정기 점검,시설
+bm,고장정비,Breakdown Maintenance의 약자로 고장 수리,시설
+layer,레이어,반도체 회로의 층,공정
+photo,포토,포토리소그래피 공정 (회로 패턴 형성),공정
+etch,식각,에칭 공정 (불필요한 부분 제거),공정
+depo,증착,Deposition 공정 (박막 형성),공정
+cmp,CMP,Chemical Mechanical Polishing 연마 공정,공정
+implant,이온주입,반도체에 불순물 주입 공정,공정
+metrology,계측,제품 특성 측정 공정,품질
+inspection,검사,결함 검출을 위한 검사 공정,품질
+wt,웨이퍼테스트,웨이퍼 상태에서 전기적 특성 검사,공정
+pnt,패키지테스트,패키징 후 최종 테스트,공정
+create_dt,생성일시,데이터가 생성된 날짜 및 시간,일시
+update_dt,수정일시,데이터가 수정된 날짜 및 시간,일시
+shift,근무조,교대 근무 조 (주간/야간),조직
+operator,작업자,설비 운영 담당자,인사
+operator_id,작업자ID,작업자를 고유하게 식별하는 식별자,식별자
