@@ -351,11 +351,10 @@ def run_production_pipeline(
     console.print("[bold cyan]" + "=" * 60 + "[/bold cyan]")
 
     try:
-        from text2sql.adapters.database.oracle_adapter import OracleAdapter
         from text2sql.adapters.vector_store.milvus_adapter import MilvusAdapter
         from text2sql.adapters.search.es_adapter import ElasticsearchAdapter
         from text2sql.adapters.llm.openai_client import OpenAIClient
-        from text2sql.offline.ingestor.log_collector import LogCollector
+        from text2sql.offline.ingestor.log_collector import JsonLogCollector
         from text2sql.offline.processor.description_generator import DescriptionGenerator
         from text2sql.offline.indexer.vector_indexer import VectorIndexer
         from text2sql.offline.indexer.es_indexer import ESIndexer
@@ -363,15 +362,19 @@ def run_production_pipeline(
 
         console.print("\n[bold]📡 외부 시스템 연결 중...[/bold]")
 
+        # JSON 로그 파일 경로
+        sample_path = PROJECT_ROOT / "data" / "samples" / "sql_logs.json"
+        if not sample_path.exists():
+            console.print(f"[red]❌ SQL 로그 파일을 찾을 수 없습니다: {sample_path}[/red]")
+            sys.exit(1)
+
         # 연결 상태 테이블
         conn_table = Table(show_header=False, box=None)
         conn_table.add_column("서비스", width=20)
         conn_table.add_column("상태")
 
-        # Oracle 연결
-        oracle_adapter = OracleAdapter(settings)
-        oracle_adapter.connect()
-        conn_table.add_row("Oracle", f"[green]✅[/green] {settings.oracle_host}:{settings.oracle_port}")
+        # JSON 로그 파일
+        conn_table.add_row("SQL 로그", f"[green]✅[/green] {sample_path}")
 
         # Milvus 연결
         milvus_adapter = MilvusAdapter(settings)
@@ -392,7 +395,7 @@ def run_production_pipeline(
         console.print(Panel(conn_table, title="[bold blue]연결 상태[/bold blue]", border_style="blue"))
 
         # 컴포넌트 생성
-        log_collector = LogCollector(oracle_adapter, limit=limit)
+        log_collector = JsonLogCollector(sample_path, limit=limit)
         log_filter = LogFilter()
         sql_normalizer = SQLNormalizer()
         description_generator = DescriptionGenerator(llm_client)
