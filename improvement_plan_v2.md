@@ -1238,9 +1238,874 @@ gantt
 
 ---
 
-## 8. 변경 이력
+## 8. 🔶 P2: Graph RAG 도입 (지식 그래프 기반 RAG)
+
+> 참고: [S-Core AI-Ready 데이터 플랫폼](https://s-core.co.kr/insight/view/ai%EC%9D%98-%EB%8F%84%EB%A9%94%EC%9D%B8-%EC%A7%80%EC%8B%9D-%ED%99%9C%EC%9A%A9%EC%9D%84-%EC%9C%84%ED%95%9C-%ED%95%84%EC%88%98-%EB%8F%84%EA%B5%AC-ai-ready-%EB%8D%B0%EC%9D%B4%ED%84%B0-%ED%94%8C%EB%9E%AB/)
+
+### 8.1 Graph RAG 필요성
+
+현재 시스템의 한계:
+- **벡터 검색만으로는 관계 표현 불가**: 테이블 간 FK 관계, 용어-컬럼 매핑 등 구조화된 관계 정보를 벡터만으로 표현하기 어려움
+- **용어사전이 단순 ES 인덱싱**: 업무 용어와 DB 스키마 간 관계가 분리되어 있음
+- **스키마 메타데이터 활용 부족**: 테이블 간 JOIN 관계, 컬럼 의미 등이 LLM 컨텍스트에 효과적으로 전달되지 않음
+
+Graph RAG 도입 효과:
+- **다층적 추론**: 테이블 → 컬럼 → 용어 → 질의 간 관계를 그래프로 표현하여 복잡한 추론 가능
+- **관계 기반 검색**: "수율과 관련된 테이블" 질의 시 FK 관계를 따라 연관 테이블까지 탐색
+- **컨텍스트 증강**: 질문의 문맥에 맞는 관계 정보를 LLM에 제공
+
+### 8.2 지식 그래프 스키마 설계
+
+```mermaid
+graph LR
+    subgraph Entities["엔티티 (노드)"]
+        T[Table<br/>테이블]
+        C[Column<br/>컬럼]
+        G[GlossaryTerm<br/>업무용어]
+        D[Domain<br/>도메인]
+        SQL[SQLTemplate<br/>SQL 템플릿]
+    end
+    
+    subgraph Relationships["관계 (엣지)"]
+        T -->|HAS_COLUMN| C
+        T -->|REFERENCES| T
+        C -->|FOREIGN_KEY_TO| C
+        C -->|MAPS_TO| G
+        G -->|BELONGS_TO| D
+        SQL -->|USES_TABLE| T
+        SQL -->|USES_COLUMN| C
+        G -->|SYNONYM_OF| G
+    end
+```
+
+### 8.3 Neo4j 기반 지식 그래프 구현
+
+```python
+# packages/core/src/text2sql_core/graph/knowledge_graph.py
+from neo4j import AsyncGraphDatabase
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class GraphNode:
+    """그래프 노드 기본 클래스"""
+    id: str
+    label: str
+    properties: dict
+
+
+@dataclass
+class TableNode(GraphNode):
+    """테이블 노드"""
+    table_name: str
+    owner: str
+    description: Optional[str] = None
+
+
+@dataclass
+class ColumnNode(GraphNode):
+    """컬럼 노드"""
+    column_name: str
+    data_type: str
+    description: Optional[str] = None
+
+
+@dataclass
+class GlossaryNode(GraphNode):
+    """용어 노드"""
+    term: str
+    korean_name: str
+    description: str
+    category: Optional[str] = None
+
+
+class KnowledgeGraphService:
+    """Neo4j 기반 지식 그래프 서비스"""
+    
+    def __init__(self, uri: str, user: str, password: str):
+        self._driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+    
+    async def build_schema_graph(
+        self, 
+        tables: list[dict],
+        foreign_keys: list[dict],
+    ) -> int:
+        """DB 스키마를 지식 그래프로 구축
+        
+        Args:
+            tables: 테이블/컬럼 메타데이터
+            foreign_keys: FK 관계 정보
+        
+        Returns:
+            생성된 노드/관계 수
+        """
+        async with self._driver.session() as session:
+            # 테이블 노드 생성
+            for table in tables:
+                await session.run("""
+                    MERGE (t:Table {name: $name})
+                    SET t.owner = $owner, t.description = $description
+                """, name=table["name"], owner=table["owner"], 
+                    description=table.get("description"))
+                
+                # 컬럼 노드 및 HAS_COLUMN 관계 생성
+                for col in table.get("columns", []):
+                    await session.run("""
+                        MERGE (c:Column {name: $col_name, table: $table_name})
+                        SET c.data_type = $data_type, c.description = $description
+                        WITH c
+                        MATCH (t:Table {name: $table_name})
+                        MERGE (t)-[:HAS_COLUMN]->(c)
+                    """, col_name=col["name"], table_name=table["name"],
+                        data_type=col["data_type"], description=col.get("description"))
+            
+            # FK 관계 생성
+            for fk in foreign_keys:
+                await session.run("""
+                    MATCH (c1:Column {name: $from_col, table: $from_table})
+                    MATCH (c2:Column {name: $to_col, table: $to_table})
+                    MERGE (c1)-[:FOREIGN_KEY_TO]->(c2)
+                    WITH c1, c2
+                    MATCH (t1:Table {name: $from_table})
+                    MATCH (t2:Table {name: $to_table})
+                    MERGE (t1)-[:REFERENCES]->(t2)
+                """, from_col=fk["from_column"], from_table=fk["from_table"],
+                    to_col=fk["to_column"], to_table=fk["to_table"])
+        
+        return len(tables)
+    
+    async def build_glossary_graph(
+        self,
+        terms: list[dict],
+        column_mappings: list[dict],
+    ) -> int:
+        """용어사전을 지식 그래프에 추가
+        
+        Args:
+            terms: 용어 목록 (glossary.csv)
+            column_mappings: 용어-컬럼 매핑
+        
+        Returns:
+            생성된 노드/관계 수
+        """
+        async with self._driver.session() as session:
+            # 도메인 및 용어 노드 생성
+            for term in terms:
+                await session.run("""
+                    MERGE (d:Domain {name: $category})
+                    MERGE (g:GlossaryTerm {term: $term})
+                    SET g.korean_name = $korean_name, 
+                        g.description = $description
+                    MERGE (g)-[:BELONGS_TO]->(d)
+                """, term=term["term"], korean_name=term["korean_name"],
+                    description=term["description"], category=term.get("category", "기타"))
+            
+            # 용어-컬럼 매핑 관계 생성
+            for mapping in column_mappings:
+                await session.run("""
+                    MATCH (g:GlossaryTerm {term: $term})
+                    MATCH (c:Column {name: $column_name})
+                    MERGE (c)-[:MAPS_TO]->(g)
+                """, term=mapping["term"], column_name=mapping["column_name"])
+        
+        return len(terms)
+    
+    async def get_related_context(
+        self,
+        query_terms: list[str],
+        max_depth: int = 2,
+    ) -> dict:
+        """질의에서 추출된 용어를 기반으로 관련 컨텍스트 조회
+        
+        Args:
+            query_terms: 질의에서 추출된 용어들 (예: ["수율", "설비"])
+            max_depth: 그래프 탐색 깊이
+        
+        Returns:
+            관련 테이블, 컬럼, 용어 정보
+        """
+        async with self._driver.session() as session:
+            result = await session.run("""
+                // 용어에서 시작하여 관련 컬럼, 테이블 탐색
+                UNWIND $terms as term_name
+                MATCH (g:GlossaryTerm)
+                WHERE g.term CONTAINS term_name OR g.korean_name CONTAINS term_name
+                
+                // 용어 → 컬럼 → 테이블 경로
+                OPTIONAL MATCH (c:Column)-[:MAPS_TO]->(g)
+                OPTIONAL MATCH (t:Table)-[:HAS_COLUMN]->(c)
+                
+                // 관련 테이블 (FK 관계)
+                OPTIONAL MATCH (t)-[:REFERENCES*1..2]-(related_t:Table)
+                
+                RETURN DISTINCT
+                    g.term as term,
+                    g.korean_name as korean_name,
+                    g.description as term_description,
+                    collect(DISTINCT {
+                        table: t.name,
+                        column: c.name,
+                        column_type: c.data_type
+                    }) as columns,
+                    collect(DISTINCT related_t.name) as related_tables
+            """, terms=query_terms)
+            
+            return await result.data()
+    
+    async def get_table_relationships(
+        self,
+        table_name: str,
+    ) -> dict:
+        """테이블의 관계 정보 조회 (JOIN 힌트 생성용)
+        
+        Args:
+            table_name: 테이블명
+        
+        Returns:
+            FK 관계 및 JOIN 가능한 테이블 정보
+        """
+        async with self._driver.session() as session:
+            result = await session.run("""
+                MATCH (t:Table {name: $table_name})
+                
+                // 이 테이블이 참조하는 테이블
+                OPTIONAL MATCH (t)-[:REFERENCES]->(ref_t:Table)
+                OPTIONAL MATCH (t)-[:HAS_COLUMN]->(c1:Column)-[:FOREIGN_KEY_TO]->(c2:Column)
+                               <-[:HAS_COLUMN]-(ref_t)
+                
+                // 이 테이블을 참조하는 테이블  
+                OPTIONAL MATCH (t)<-[:REFERENCES]-(ref_by_t:Table)
+                
+                RETURN 
+                    t.name as table_name,
+                    collect(DISTINCT {
+                        target_table: ref_t.name,
+                        from_column: c1.name,
+                        to_column: c2.name
+                    }) as references,
+                    collect(DISTINCT ref_by_t.name) as referenced_by
+            """, table_name=table_name)
+            
+            return await result.single()
+```
+
+### 8.4 Graph RAG 통합 검색 서비스
+
+```python
+# packages/agent/src/text2sql_agent/services/graph_rag_service.py
+from text2sql_core.graph.knowledge_graph import KnowledgeGraphService
+from text2sql_agent.services.hybrid_retrieval import HybridRetrievalService
+from langchain_openai import ChatOpenAI
+
+
+class GraphRAGService:
+    """Graph + Vector 통합 RAG 서비스
+    
+    1. 질의에서 핵심 용어 추출 (LLM)
+    2. 지식 그래프에서 관련 컨텍스트 조회
+    3. 하이브리드 벡터 검색으로 SQL 템플릿 검색
+    4. 그래프 컨텍스트 + 벡터 검색 결과 병합
+    """
+    
+    def __init__(
+        self,
+        graph_service: KnowledgeGraphService,
+        hybrid_service: HybridRetrievalService,
+        llm: ChatOpenAI,
+    ):
+        self._graph = graph_service
+        self._hybrid = hybrid_service
+        self._llm = llm
+    
+    async def extract_query_terms(self, query: str) -> list[str]:
+        """질의에서 핵심 업무 용어 추출"""
+        
+        response = await self._llm.ainvoke(f"""
+다음 질의에서 반도체 제조 관련 핵심 용어를 추출하세요.
+용어는 테이블명, 컬럼명, 업무 용어 등이 될 수 있습니다.
+
+질의: {query}
+
+JSON 형식으로 응답: ["용어1", "용어2", ...]
+""")
+        import json
+        return json.loads(response.content)
+    
+    async def search(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> dict:
+        """Graph + Vector 통합 검색
+        
+        Returns:
+            {
+                "graph_context": {...},  # 그래프 기반 관계 정보
+                "templates": [...],       # 벡터 검색된 SQL 템플릿
+                "join_hints": [...],      # JOIN 관계 힌트
+            }
+        """
+        # 1. 질의에서 핵심 용어 추출
+        terms = await self.extract_query_terms(query)
+        
+        # 2. 그래프에서 관련 컨텍스트 조회
+        graph_context = await self._graph.get_related_context(terms)
+        
+        # 3. 하이브리드 벡터 검색
+        templates = await self._hybrid.search(query, top_k)
+        
+        # 4. 템플릿에서 사용된 테이블의 관계 정보 조회
+        tables_in_templates = set()
+        for t in templates:
+            tables_in_templates.update(t.tables)
+        
+        join_hints = []
+        for table in tables_in_templates:
+            rel = await self._graph.get_table_relationships(table)
+            if rel:
+                join_hints.append(rel)
+        
+        return {
+            "graph_context": graph_context,
+            "templates": templates,
+            "join_hints": join_hints,
+            "extracted_terms": terms,
+        }
+```
+
+### 8.5 Graph RAG 아키텍처
+
+```mermaid
+flowchart TB
+    Query[사용자 질의]
+    
+    subgraph TermExtraction["1️⃣ 용어 추출"]
+        LLM1[LLM 용어 추출]
+        Terms[핵심 용어 목록]
+    end
+    
+    subgraph GraphSearch["2️⃣ 그래프 검색"]
+        Neo4j[(Neo4j<br/>Knowledge Graph)]
+        Context[관계 컨텍스트<br/>테이블-컬럼-용어]
+        JoinHints[JOIN 힌트]
+    end
+    
+    subgraph VectorSearch["3️⃣ 벡터 검색"]
+        Milvus[(Milvus<br/>Hybrid)]
+        Templates[SQL 템플릿 후보]
+    end
+    
+    subgraph ContextMerge["4️⃣ 컨텍스트 병합"]
+        Merge[그래프 + 벡터 결과]
+        EnrichedPrompt[증강된 프롬프트]
+    end
+    
+    subgraph SQLGen["5️⃣ SQL 생성"]
+        LLM2[LLM SQL 생성]
+        SQL[최종 SQL]
+    end
+    
+    Query --> LLM1
+    LLM1 --> Terms
+    Terms --> Neo4j
+    Neo4j --> Context
+    Neo4j --> JoinHints
+    
+    Query --> Milvus
+    Milvus --> Templates
+    
+    Context --> Merge
+    JoinHints --> Merge
+    Templates --> Merge
+    Merge --> EnrichedPrompt
+    
+    EnrichedPrompt --> LLM2
+    LLM2 --> SQL
+```
+
+---
+
+## 9. 🔶 P2: Tool 기반 자율 에이전트 아키텍처
+
+> 참고: [LangGraph Dynamic Tool Calling](https://changelog.langchain.com/announcements/dynamic-tool-calling-in-langgraph-agents)
+
+### 9.1 Tool 기반 아키텍처 필요성
+
+현재 시스템의 한계:
+- **하드코딩된 에이전트 흐름**: Phase 1 → Phase 2로 고정된 순서
+- **유연성 부족**: 상황에 따라 다른 도구를 선택할 수 없음
+- **확장성 제한**: 새로운 기능 추가 시 그래프 구조 변경 필요
+
+Tool 기반 아키텍처 장점:
+- **자율적 도구 선택**: LLM이 상황에 맞는 도구를 동적으로 선택
+- **워크플로우 유연성**: 복잡한 질의에 대해 여러 도구를 조합
+- **점진적 확장**: 새로운 도구 추가 시 기존 구조 변경 없음
+
+### 9.2 Tool 정의
+
+```python
+# packages/agent/src/text2sql_agent/tools/__init__.py
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
+
+
+# ========== Tool Input Schemas ==========
+
+class HybridSearchInput(BaseModel):
+    """하이브리드 검색 도구 입력"""
+    query: str = Field(..., description="검색할 자연어 질의")
+    top_k: int = Field(default=5, description="반환할 결과 수")
+
+
+class GraphContextInput(BaseModel):
+    """그래프 컨텍스트 조회 도구 입력"""
+    terms: list[str] = Field(..., description="검색할 업무 용어 목록")
+    max_depth: int = Field(default=2, description="그래프 탐색 깊이")
+
+
+class SchemaLookupInput(BaseModel):
+    """스키마 조회 도구 입력"""
+    table_name: str = Field(..., description="조회할 테이블명")
+    include_relationships: bool = Field(default=True, description="FK 관계 포함 여부")
+
+
+class SQLValidationInput(BaseModel):
+    """SQL 검증 도구 입력"""
+    sql: str = Field(..., description="검증할 SQL 쿼리")
+    user_query: str = Field(..., description="원본 사용자 질의")
+
+
+class SQLExecutionInput(BaseModel):
+    """SQL 실행 도구 입력"""
+    sql: str = Field(..., description="실행할 SQL 쿼리")
+    limit: int = Field(default=100, description="결과 제한 수")
+
+
+# ========== Tool Implementations ==========
+
+@tool("hybrid_search", args_schema=HybridSearchInput)
+async def hybrid_search_tool(query: str, top_k: int = 5) -> list[dict]:
+    """SQL 템플릿을 하이브리드 검색 (벡터 + BM25)
+    
+    사용자 질의와 유사한 기존 SQL 템플릿을 검색합니다.
+    의미적 유사성(벡터)과 키워드 매칭(BM25)을 결합하여 정확한 결과를 반환합니다.
+    """
+    from text2sql_agent.services.hybrid_retrieval import HybridRetrievalService
+    from text2sql_core.config import UnifiedSettings
+    
+    service = HybridRetrievalService(UnifiedSettings())
+    results = await service.search(query, top_k)
+    
+    return [r.model_dump() for r in results]
+
+
+@tool("graph_context", args_schema=GraphContextInput)
+async def graph_context_tool(terms: list[str], max_depth: int = 2) -> dict:
+    """지식 그래프에서 관련 컨텍스트 조회
+    
+    업무 용어를 기반으로 관련된 테이블, 컬럼, FK 관계 등을 
+    지식 그래프에서 탐색하여 반환합니다.
+    수율, 설비, 공정 등 도메인 용어와 DB 스키마 간 매핑 정보를 제공합니다.
+    """
+    from text2sql_core.graph.knowledge_graph import KnowledgeGraphService
+    from text2sql_core.config import UnifiedSettings
+    
+    settings = UnifiedSettings()
+    service = KnowledgeGraphService(
+        uri=settings.neo4j.uri,
+        user=settings.neo4j.user,
+        password=settings.neo4j.password,
+    )
+    
+    return await service.get_related_context(terms, max_depth)
+
+
+@tool("schema_lookup", args_schema=SchemaLookupInput)
+async def schema_lookup_tool(table_name: str, include_relationships: bool = True) -> dict:
+    """Oracle DB 스키마 정보 조회
+    
+    특정 테이블의 컬럼 정보, 데이터 타입, 코멘트 및 
+    FK 관계 정보를 조회합니다.
+    SQL 생성 시 정확한 컬럼명과 JOIN 조건을 파악하는 데 사용됩니다.
+    """
+    from text2sql_core.schema.oracle_loader import OracleSchemaLoader
+    from text2sql_core.config import UnifiedSettings
+    
+    settings = UnifiedSettings()
+    loader = OracleSchemaLoader(settings)
+    
+    table_info = await loader.load_table(settings.oracle.schema.username, table_name)
+    
+    result = {
+        "table": table_name,
+        "columns": [c.__dict__ for c in table_info.columns],
+        "primary_key": table_info.primary_key,
+    }
+    
+    if include_relationships:
+        result["foreign_keys"] = [fk.__dict__ for fk in table_info.foreign_keys]
+        result["related_tables"] = await loader.get_related_tables(table_name)
+    
+    return result
+
+
+@tool("validate_sql", args_schema=SQLValidationInput)
+async def validate_sql_tool(sql: str, user_query: str) -> dict:
+    """생성된 SQL의 문법적/의미적 검증
+    
+    SQL 쿼리가 문법적으로 올바른지, 사용된 테이블/컬럼이 존재하는지,
+    사용자 질의 의도에 부합하는지 검증합니다.
+    SELECT 쿼리만 허용하며 위험한 키워드(DROP, DELETE 등)를 차단합니다.
+    """
+    from text2sql_core.validation.sql_validator import SQLValidator
+    from text2sql_core.config import UnifiedSettings
+    
+    settings = UnifiedSettings()
+    validator = SQLValidator()
+    
+    try:
+        # 문법 검증
+        validated_sql = validator.validate_syntax(sql)
+        
+        # 의미 검증
+        is_valid, confidence, explanation = await validator.validate_semantic(
+            sql, user_query, settings.oracle.schema.username
+        )
+        
+        return {
+            "is_valid": is_valid,
+            "confidence": confidence,
+            "explanation": explanation,
+            "validated_sql": validated_sql,
+        }
+    except Exception as e:
+        return {
+            "is_valid": False,
+            "confidence": 0.0,
+            "explanation": str(e),
+            "validated_sql": None,
+        }
+
+
+@tool("execute_sql", args_schema=SQLExecutionInput)
+async def execute_sql_tool(sql: str, limit: int = 100) -> dict:
+    """검증된 SQL을 Oracle OLTP DB에서 실행
+    
+    검증을 통과한 SELECT 쿼리를 실제 DB에서 실행하여 결과를 반환합니다.
+    결과 행 수는 limit 파라미터로 제한됩니다.
+    """
+    from text2sql.adapters.database.oracle_adapter import OracleAdapter
+    from text2sql_core.config import UnifiedSettings
+    
+    settings = UnifiedSettings()
+    adapter = OracleAdapter(settings.oracle.oltp)
+    
+    # LIMIT 적용 (Oracle 문법)
+    limited_sql = f"SELECT * FROM ({sql}) WHERE ROWNUM <= {limit}"
+    
+    result = await adapter.execute_query(limited_sql)
+    
+    return {
+        "row_count": len(result),
+        "columns": list(result[0].keys()) if result else [],
+        "data": result[:limit],
+    }
+
+
+# ========== Tool Registry ==========
+
+ALL_TOOLS = [
+    hybrid_search_tool,
+    graph_context_tool,
+    schema_lookup_tool,
+    validate_sql_tool,
+    execute_sql_tool,
+]
+```
+
+### 9.3 Tool 기반 에이전트 구현
+
+```python
+# packages/agent/src/text2sql_agent/agents/tool_agent.py
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+from langgraph.checkpoint.memory import MemorySaver
+
+from text2sql_agent.tools import ALL_TOOLS
+from text2sql_core.config import UnifiedSettings
+
+
+def create_text2sql_agent(settings: UnifiedSettings = None):
+    """Tool 기반 자율 에이전트 생성
+    
+    LangGraph의 ReAct 패턴을 활용하여 
+    에이전트가 상황에 맞는 도구를 자율적으로 선택합니다.
+    """
+    
+    settings = settings or UnifiedSettings()
+    
+    llm = ChatOpenAI(
+        base_url=settings.llm.base_url,
+        api_key=settings.llm.api_key,
+        model=settings.llm.model_name,
+        temperature=settings.llm.temperature,
+    )
+    
+    # 시스템 프롬프트: 도구 사용 가이드
+    system_prompt = """당신은 Text2SQL 전문가입니다. 
+사용자의 자연어 질의를 SQL로 변환하는 것이 목표입니다.
+
+## 사용 가능한 도구
+
+1. **hybrid_search**: 기존 SQL 템플릿 검색 (먼저 사용 권장)
+2. **graph_context**: 업무 용어 → 테이블/컬럼 매핑 조회
+3. **schema_lookup**: 특정 테이블의 상세 스키마 조회
+4. **validate_sql**: 생성된 SQL 검증
+5. **execute_sql**: 검증된 SQL 실행
+
+## 권장 워크플로우
+
+### 간단한 질의 (템플릿 매칭 가능)
+1. hybrid_search로 유사 템플릿 검색
+2. 템플릿이 있으면 약간 수정하여 SQL 생성
+3. validate_sql로 검증
+4. execute_sql로 실행
+
+### 복잡한 질의 (스키마 탐색 필요)
+1. graph_context로 관련 테이블/컬럼 파악
+2. schema_lookup으로 상세 스키마 확인
+3. SQL 생성
+4. validate_sql로 검증
+5. execute_sql로 실행
+
+## 주의사항
+- SELECT 쿼리만 생성 가능
+- 반드시 validate_sql로 검증 후 실행
+- 결과가 많을 수 있으니 적절한 WHERE 조건 사용
+"""
+    
+    # ReAct 에이전트 생성 (도구 자율 선택)
+    agent = create_react_agent(
+        model=llm,
+        tools=ALL_TOOLS,
+        prompt=system_prompt,
+        checkpointer=MemorySaver(),  # 대화 기록 유지
+    )
+    
+    return agent
+
+
+# 사용 예시
+async def run_query(query: str) -> dict:
+    """사용자 질의 실행"""
+    agent = create_text2sql_agent()
+    
+    result = await agent.ainvoke({
+        "messages": [{"role": "user", "content": query}]
+    })
+    
+    return result
+```
+
+### 9.4 동적 도구 선택 (Dynamic Tool Calling)
+
+```python
+# packages/agent/src/text2sql_agent/agents/dynamic_tool_agent.py
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
+from typing import TypedDict, Annotated
+from operator import add
+
+from text2sql_agent.tools import (
+    hybrid_search_tool,
+    graph_context_tool,
+    schema_lookup_tool,
+    validate_sql_tool,
+    execute_sql_tool,
+)
+
+
+class AgentState(TypedDict):
+    """에이전트 상태"""
+    messages: Annotated[list, add]
+    current_tools: list[str]  # 현재 단계에서 사용 가능한 도구
+    phase: str  # "search" | "generate" | "validate" | "execute"
+
+
+def get_available_tools(phase: str) -> list:
+    """단계별 사용 가능한 도구 반환 (Dynamic Tool Calling)
+    
+    LangGraph의 Dynamic Tool Calling을 활용하여
+    각 단계에서 적절한 도구만 노출합니다.
+    """
+    tool_sets = {
+        "search": [hybrid_search_tool, graph_context_tool],
+        "generate": [schema_lookup_tool, graph_context_tool],
+        "validate": [validate_sql_tool],
+        "execute": [execute_sql_tool],
+    }
+    return tool_sets.get(phase, [])
+
+
+def build_dynamic_agent():
+    """동적 도구 선택 에이전트 그래프 구성"""
+    
+    builder = StateGraph(AgentState)
+    
+    # 노드 정의
+    def router_node(state: AgentState) -> AgentState:
+        """현재 상태에 따라 다음 단계 및 도구 결정"""
+        messages = state["messages"]
+        last_message = messages[-1] if messages else None
+        
+        # 상태에 따라 phase 및 도구 업데이트
+        if state.get("phase") == "search":
+            return {**state, "phase": "generate", 
+                    "current_tools": ["schema_lookup", "graph_context"]}
+        elif state.get("phase") == "generate":
+            return {**state, "phase": "validate",
+                    "current_tools": ["validate_sql"]}
+        elif state.get("phase") == "validate":
+            return {**state, "phase": "execute",
+                    "current_tools": ["execute_sql"]}
+        else:
+            return {**state, "phase": "search",
+                    "current_tools": ["hybrid_search", "graph_context"]}
+    
+    def tool_node_factory(phase: str):
+        """단계별 ToolNode 생성"""
+        tools = get_available_tools(phase)
+        return ToolNode(tools)
+    
+    # 노드 추가
+    builder.add_node("router", router_node)
+    builder.add_node("search_tools", tool_node_factory("search"))
+    builder.add_node("generate_tools", tool_node_factory("generate"))
+    builder.add_node("validate_tools", tool_node_factory("validate"))
+    builder.add_node("execute_tools", tool_node_factory("execute"))
+    
+    # 엣지 정의
+    def route_by_phase(state: AgentState) -> str:
+        phase = state.get("phase", "search")
+        return f"{phase}_tools"
+    
+    builder.set_entry_point("router")
+    builder.add_conditional_edges("router", route_by_phase)
+    
+    # 각 도구 노드 후 다시 라우터로
+    for node in ["search_tools", "generate_tools", "validate_tools"]:
+        builder.add_edge(node, "router")
+    
+    builder.add_edge("execute_tools", END)
+    
+    return builder.compile()
+```
+
+### 9.5 Tool 기반 아키텍처 다이어그램
+
+```mermaid
+flowchart TB
+    Query[사용자 질의]
+    
+    subgraph Orchestrator["🧠 오케스트레이터 (ReAct Agent)"]
+        LLM[LLM<br/>도구 선택 판단]
+        ToolRouter[도구 라우터]
+    end
+    
+    subgraph ToolBox["🧰 도구 상자"]
+        T1[🔍 hybrid_search<br/>템플릿 검색]
+        T2[📊 graph_context<br/>그래프 컨텍스트]
+        T3[📋 schema_lookup<br/>스키마 조회]
+        T4[✅ validate_sql<br/>SQL 검증]
+        T5[▶️ execute_sql<br/>SQL 실행]
+    end
+    
+    subgraph Backend["백엔드 서비스"]
+        Milvus[(Milvus)]
+        Neo4j[(Neo4j)]
+        Oracle[(Oracle)]
+    end
+    
+    Query --> LLM
+    LLM --> ToolRouter
+    
+    ToolRouter --> T1
+    ToolRouter --> T2
+    ToolRouter --> T3
+    ToolRouter --> T4
+    ToolRouter --> T5
+    
+    T1 --> Milvus
+    T2 --> Neo4j
+    T3 --> Oracle
+    T4 --> Oracle
+    T5 --> Oracle
+    
+    T1 --> LLM
+    T2 --> LLM
+    T3 --> LLM
+    T4 --> LLM
+    T5 --> LLM
+```
+
+---
+
+## 10. 설정 확장 (Neo4j 추가)
+
+```python
+# packages/core/src/text2sql_core/config.py 확장
+
+class Neo4jSettings(BaseSettings):
+    """Neo4j 지식 그래프 설정"""
+    uri: str = Field(default="bolt://localhost:7687")
+    user: str = Field(default="neo4j")
+    password: str = Field(default="")
+    database: str = Field(default="neo4j")
+
+
+class UnifiedSettings(BaseSettings):
+    # ... 기존 설정 ...
+    
+    # Neo4j 추가
+    neo4j: Neo4jSettings = Field(default_factory=Neo4jSettings)
+```
+
+```bash
+# .env.example 추가
+
+# Neo4j (Knowledge Graph)
+TEXT2SQL_NEO4J__URI=bolt://neo4j:7687
+TEXT2SQL_NEO4J__USER=neo4j
+TEXT2SQL_NEO4J__PASSWORD=your-neo4j-password
+TEXT2SQL_NEO4J__DATABASE=text2sql
+```
+
+---
+
+## 11. 업데이트된 체크리스트
+
+### 11.1 P2: Graph RAG 구현
+- [ ] Neo4j 설정 추가 (`Neo4jSettings`)
+- [ ] `KnowledgeGraphService` 구현
+- [ ] 스키마 → 그래프 변환 파이프라인
+- [ ] 용어사전 → 그래프 매핑
+- [ ] `GraphRAGService` 통합 검색 구현
+
+### 11.2 P2: Tool 기반 에이전트
+- [ ] Tool Input Schema 정의
+- [ ] 5개 핵심 도구 구현 (`hybrid_search`, `graph_context`, `schema_lookup`, `validate_sql`, `execute_sql`)
+- [ ] ReAct 에이전트 구성
+- [ ] Dynamic Tool Calling 적용
+- [ ] 기존 하드코딩된 그래프 구조 마이그레이션
+
+---
+
+## 12. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |-----|------|----------|
 | v1 | 2026-01-13 | 최초 작성 |
 | v2 | 2026-01-13 | 분산 트레이싱 제외, 재시도 로직 LangChain/LangGraph 활용, Oracle 이중 접속정보, 하이브리드 검색 BM25 통합, stage→phase 용어 통일, SQL 검증 절차 추가 |
+| v2.1 | 2026-01-13 | Graph RAG 도입 (Neo4j 지식 그래프), Tool 기반 자율 에이전트 아키텍처 추가 |
