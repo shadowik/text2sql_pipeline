@@ -1,5 +1,22 @@
-```markdown
 # LLM/RAG 기반 Text2SQL 메타데이터 파이프라인 설계서
+
+> **문서 버전**: v0.1 (Draft)  
+> **최종 수정**: 2026-01-26
+
+---
+
+## 목차
+
+1. [목표](#1-목표)
+2. [전체 아키텍처](#2-전체-아키텍처)
+3. [데이터 모델 설계](#3-데이터-모델-설계)
+4. [증분 & Dedup 처리 로직](#4-증분--dedup-처리-로직)
+5. [LLM 메타데이터 생성 파이프라인](#5-llm-메타데이터-생성-파이프라인)
+6. [저장 및 RAG 활용](#6-저장-및-rag-활용)
+7. [운영 및 튜닝 포인트](#7-운영-및-튜닝-포인트)
+8. [향후 확장 아이디어](#8-향후-확장-아이디어)
+
+---
 
 ## 1. 목표
 
@@ -9,97 +26,105 @@
 
 ---
 
-## 2. 전체 아키텍처 (Mermaid)
+## 2. 전체 아키텍처
+
+### 2.1 시스템 개요
+
+```mermaid
+flowchart TD
+    subgraph Source["📥 Source"]
+        OLTPDB["Oracle/OLTP<br/>SQL 로그"]
+    end
+
+    subgraph Batch["⚙️ Batch ETL"]
+        ETL["메타데이터 파이프라인"]
+    end
+
+    subgraph Storage["💾 Storage"]
+        M_DEDUP["Milvus Dedup<br/>(MinHash LSH)"]
+        M_MAIN["Milvus Main<br/>(RAG 벡터DB)"]
+        META_DB["ES/RDB<br/>(로그/메타)"]
+    end
+
+    subgraph Agent["🤖 Text2SQL Agent"]
+        RAG["RAG 검색 + LLM 생성"]
+    end
+
+    OLTPDB --> ETL
+    ETL <--> M_DEDUP
+    ETL --> M_MAIN
+    ETL --> META_DB
+    RAG --> M_MAIN
+    RAG --> META_DB
+```
+
+### 2.2 ETL 파이프라인 상세
+
+```mermaid
+flowchart TD
+    E1["1. 추출<br/>신규/변경 SQL 로그"]
+    E2["2. 정규화<br/>sqlglot 파싱"]
+    E3["3. MinHash 생성<br/>n-gram + 시그니처"]
+    E4["4. Dedup 검색<br/>Milvus LSH"]
+    E5{"중복 여부<br/>판정"}
+    E6["5. LLM 메타 생성<br/>purpose, table_rel 등"]
+    E7["6. 검증/리뷰"]
+    E8["7. 임베딩 & 저장"]
+    E9["8. 링크 업데이트"]
+
+    E1 --> E2 --> E3 --> E4 --> E5
+    E5 -->|"신규 템플릿"| E6 --> E7 --> E8
+    E5 -->|"기존 템플릿"| E9
+```
+
+### 2.3 Text2SQL Agent 흐름
 
 ```mermaid
 flowchart LR
-    subgraph Source["Source Systems"]
-        OLTPDB["Oracle/OLTP\nSQL 실행 로그 테이블"]
-    end
-
-    subgraph ETL["Batch ETL (Daily / Hourly)"]
-        E1["추출\n- 하루치 신규 SQL 로그 SELECT\n- WHERE log_dt = yesterday AND (processed_yn = 'N' OR updated_at > last_run)"]
-        E2["정규화(Normalize)\n- sqlglot 파싱\n- 파라미터 제거, 포맷 통일\n- template_sql, template_hash 생성"]
-        E3["MinHash 시그니처 생성\n- n-gram shingling\n- MinHash(num_perm=256)\n- binary vector 변환"]
-        E4["Dedup 후보 검색(Milvus: MINHASH_LSH)\n- template_minhash 로 search\n- Jaccard 기반 근사 유사도 후보 조회"]
-        E5["후보 정밀 비교\n- 후보 템플릿과 cosine / Levenshtein\n- max_sim >= T_dup → 기존 템플릿으로 매핑\n- max_sim < T_dup → 신규 템플릿"]
-        E6["LLM 메타데이터 생성\n(신규 템플릿만)\n- purpose\n- table_rel_info\n- domain_knowledges\n- table/column meta API 사용"]
-        E7["검증/리뷰\n- 자동 검증(스키마 일치, 조인 유효)\n- 필요시 도메인 전문가 검토 큐"]
-        E8["임베딩 & 저장\n- JSON 메타데이터 임베딩\n- Milvus(main) upsert\n- ES/RDB에 보조 메타/로그 저장"]
-        E9["링크 업데이트\n- 기존 템플릿으로 매핑된 로그는\n  template_id 참조만 추가\n- sql_log_id ↔ template_id 관계 저장"]
-    end
-
-    subgraph Stores["Storage"]
-        M_DEDUP["Milvus Dedup 컬렉션\n- template_id(pk)\n- minhash_signature(binary vec)\n- template_sql\n- template_hash"]
-        M_MAIN["Milvus Main 컬렉션\n- template_id(pk)\n- meta_json\n- vector(embedding)\n- stats(사용 횟수 등)"]
-        META_DB["ES / RDB\n- sql_log 테이블 & 메타데이터\n- template 링크\n- 리뷰 상태 등"]
-    end
-
-    subgraph Agent["LLM Text2SQL Agent (Online)"]
-        UQ["사용자 자연어 질의"]
-        R1["RAG 검색\n- Milvus Main에서\n  purpose/table_rel/domain_knowledges 검색\n- 필요시 ES에서 원본 SQL 로그/메타 검색"]
-        LLMGEN["LLM SQL 생성\n- 검색된 메타데이터 기반\n- 안전/규칙 준수 프롬프트"]
-        EXEC["SQL 검증 & 실행\n- Syntax 체크\n- 제한된 read-only 실행\n- Top-N 결과 반환"]
-    end
-
-    OLTPDB --> E1
-    E1 --> E2 --> E3 --> E4
-    M_DEDUP <-->|search before insert| E4
-    E4 --> E5
-    E5 -->|신규 템플릿| E6
-    E5 -->|기존 템플릿 매핑만| E9
-
-    E6 --> E7 --> E8
-    E8 --> M_MAIN
-    E8 --> META_DB
-    E9 --> META_DB
-    E3 -->|신규 템플릿 시| M_DEDUP
-
-    UQ --> R1 --> LLMGEN --> EXEC
-    R1 --> M_MAIN
-    R1 --> META_DB
+    UQ["사용자 질의"] --> R1["RAG 검색"]
+    R1 --> LLMGEN["LLM SQL 생성"]
+    LLMGEN --> EXEC["검증 & 실행"]
+    EXEC --> RES["결과 반환"]
 ```
 
 ---
 
 ## 3. 데이터 모델 설계
 
-### 3.1 Milvus Dedup 컬렉션 (템플릿 중복 판별용)
+### 3.1 Milvus Dedup 컬렉션
 
-- 목적: **빠른 근사 중복 탐지** (MinHash LSH로 search-before-insert).
-- 주요 필드:
-  - template_id: INT64, PK
-  - template_hash: VARCHAR (정규화된 SQL의 hash)
-  - minhash_signature: BINARY_VECTOR (dim = MINHASH_DIM × HASH_BIT_WIDTH)
-  - template_sql: VARCHAR (정규화된 SQL 텍스트)
-  - created_at: DATETIME
+> **목적**: 빠른 근사 중복 탐지 (MinHash LSH로 search-before-insert)
 
-- 인덱스:
-  - minhash_signature: INDEX type = MINHASH_LSH, 파라미터(bands, dim_per_band)를 통해 성능/재현율 튜닝.
+| 필드명 | 타입 | 설명 |
+|--------|------|------|
+| template_id | INT64 (PK) | 템플릿 고유 ID |
+| template_hash | VARCHAR | 정규화된 SQL의 hash |
+| minhash_signature | BINARY_VECTOR | MinHash 시그니처 (dim = MINHASH_DIM × HASH_BIT_WIDTH) |
+| template_sql | VARCHAR | 정규화된 SQL 텍스트 |
+| created_at | DATETIME | 생성 시각 |
 
-### 3.2 Milvus Main 컬렉션 (RAG용 메타데이터)
+- **인덱스**: `minhash_signature`에 MINHASH_LSH 인덱스 (bands, dim_per_band 튜닝)
 
-- 목적: Text2SQL 에이전트가 Retrieval하는 **핵심 지식 베이스**.
-- 주요 필드:
-  - template_id: INT64, PK (Dedup 컬렉션의 template_id와 동일)
-  - meta_vector: FLOAT_VECTOR (LLM 임베딩)
-  - meta_json: JSON / VARCHAR
-    - purpose: STRING
-    - table_rel_info: [STRING]
-    - domain_knowledges: [OBJECT]
-    - tables: [TABLE_NAME, desc, columns…]
-    - stats: 사용 횟수, 마지막 실행 시각 등
-  - created_at, updated_at
+### 3.2 Milvus Main 컬렉션
 
-- 인덱스:
-  - meta_vector: HNSW / IVF_FLAT 등 ANN 인덱스.
+> **목적**: Text2SQL 에이전트가 Retrieval하는 핵심 지식 베이스
+
+| 필드명 | 타입 | 설명 |
+|--------|------|------|
+| template_id | INT64 (PK) | Dedup 컬렉션과 동일한 ID |
+| meta_vector | FLOAT_VECTOR | LLM 임베딩 벡터 |
+| meta_json | JSON | 메타데이터 (purpose, table_rel_info, domain_knowledges, tables, stats) |
+| created_at | DATETIME | 생성 시각 |
+| updated_at | DATETIME | 수정 시각 |
+
+- **인덱스**: `meta_vector`에 HNSW / IVF_FLAT 등 ANN 인덱스
 
 ### 3.3 메타/로그 DB (ES 또는 RDB)
 
-- sql_log:
-  - sql_log_id, raw_sql, normalized_template_sql, template_id, exec_time, user_id, created_at…
-- template_meta:
-  - template_id, review_status(자동/검토중/승인), last_reviewer, comments 등.
+| 테이블 | 주요 필드 |
+|--------|-----------|
+| sql_log | sql_log_id, raw_sql, normalized_template_sql, template_id, exec_time, user_id, created_at |
+| template_meta | template_id, review_status(자동/검토중/승인), last_reviewer, comments |
 
 ---
 
@@ -210,14 +235,12 @@ flowchart LR
 
 ## 7. 운영 및 튜닝 포인트
 
-- Dedup 임계값:
-  - MinHash + 정밀 비교 조합에서 T_dup(예: 0.9~0.97) 튜닝.
-- 배치 주기:
-  - 하루 1회 → 초기 단계, 증가 시 시간 단위 배치/마이크로 배치 검토.
-- 모니터링:
-  - dedup ratio(패스되는 로그 비율), 신규 템플릿 수, LLM 호출 횟수/비용.
-- 스케일링:
-  - Milvus partition(날짜/도메인별) 활용, MinHash LSH 인덱스 파라미터(bands) 조정으로 성능/재현율 균형.
+| 항목 | 설명 | 권장값/방향 |
+|------|------|-------------|
+| Dedup 임계값 (T_dup) | MinHash + 정밀 비교에서 중복 판정 기준 | 0.9 ~ 0.97 |
+| 배치 주기 | 증분 처리 주기 | 초기: 1일 1회 → 확장 시 시간 단위 |
+| 모니터링 지표 | 운영 상태 확인 | dedup ratio, 신규 템플릿 수, LLM 호출 횟수/비용 |
+| 스케일링 | 대용량 대응 | Milvus partition (날짜/도메인별), LSH bands 파라미터 튜닝 |
 
 ---
 
@@ -229,6 +252,3 @@ flowchart LR
   - table_rel_info를 관계 그래프로 저장, 조인 경로 추천에 활용.
 - Synthetic NL 쿼리 생성:
   - 템플릿 메타데이터로부터 가상 자연어 질의 생성 → Text2SQL 에이전트 평가/튜닝 데이터로 사용.
-```
-
-모든 web 링크와 citation을 제거한 깔끔한 설계 문서입니다. 바로 Markdown 파일로 저장해서 사용하실 수 있습니다.
