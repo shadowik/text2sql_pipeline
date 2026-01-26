@@ -32,21 +32,21 @@
 
 ```mermaid
 flowchart TD
-    subgraph Source["📥 Source"]
+    subgraph Source[" Source"]
         OLTPDB["Oracle/OLTP<br/>SQL 로그"]
     end
 
-    subgraph Batch["⚙️ Batch ETL"]
+    subgraph Batch[" Batch ETL"]
         ETL["메타데이터 파이프라인"]
     end
 
-    subgraph Storage["💾 Storage"]
+    subgraph Storage[" Storage"]
         M_DEDUP["Milvus Dedup<br/>(MinHash LSH)"]
         M_MAIN["Milvus Main<br/>(RAG 벡터DB)"]
         META_DB["ES/RDB<br/>(로그/메타)"]
     end
 
-    subgraph Agent["🤖 Text2SQL Agent"]
+    subgraph Agent[" Text2SQL Agent"]
         RAG["RAG 검색 + LLM 생성"]
     end
 
