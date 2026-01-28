@@ -48,7 +48,7 @@ flowchart TD
     subgraph Storage[" Storage (Milvus 2.6+)"]
         M_DEDUP["Milvus Dedup<br/>(MinHash LSH)"]
         M_MAIN["Milvus Main<br/>(RAG 벡터DB)"]
-        META_DB["ES/RDB<br/>(로그/메타)"]
+        META_DB["Oracle RDB<br/>(로그/메타)"]
     end
 
     subgraph Agent[" Text2SQL Agent"]
@@ -143,7 +143,7 @@ flowchart LR
 |--------|------|------|
 | template_id | INT64 (PK) | Dedup 컬렉션과 동일한 ID |
 | meta_vector | FLOAT_VECTOR | LLM 임베딩 벡터 |
-| meta_json | JSON | LLM 증강 메타데이터 (description, table_rel_info, domain_knowledges, tables, stats) |
+| meta_json | JSON | LLM 증강 메타데이터 (description, table_rel_info, domain_knowledges) |
 | created_at | DATETIME | 생성 시각 |
 | updated_at | DATETIME | 수정 시각 |
 | reviewed_by | VARCHAR | 검토자 (전문가 첨삭 시) |
@@ -151,11 +151,11 @@ flowchart LR
 
 - **인덱스**: `meta_vector`에 HNSW / IVF_FLAT 등 ANN 인덱스
 
-### 3.3 메타/로그 DB (ES 또는 RDB)
+### 3.3 메타/로그 DB (Oracle RDB)
 
 | 테이블 | 주요 필드 |
 |--------|-----------|
-| sql_log | sql_log_id, raw_sql, normalized_template_sql, template_id, exec_time, user_id, created_at |
+| sql_log | sql_log_id, raw_sql, normalized_template_sql, template_id, user_id, created_at |
 | template_meta | template_id, review_status(자동/검토중/승인), last_reviewer, comments |
 | table_registry | table_name, first_seen_at, last_seen_at, sql_count, meta_status |
 
@@ -278,7 +278,6 @@ flowchart LR
   - **원본 SQL** (정규화 전, 비즈니스 지식 추출용)
   - 정규화된 template_sql
   - 테이블/컬럼 메타데이터 (실제 사용된 테이블에서 조회)
-  - 필요시 해당 템플릿을 사용하는 대표 실행 로그 샘플 (기간/유저 등).
 - LLM에 요구하는 출력(JSON):
 
 ```json
@@ -301,21 +300,10 @@ flowchart LR
       "sql_snippet": "AREA_ID = 'ETCH'",
       "source_value": "ETCH"
     }
-  ],
-  "tables": [
-    {
-      "name": "R3_EQUIP_STATUS",
-      "desc": "장비 상태 이력 테이블",
-      "columns": [
-        {"name": "EQUIP_ID", "desc": "장비 ID"},
-        {"name": "MES_STAT_TYP", "desc": "장비 상태 타입"}
-      ]
-    }
   ]
 }
 ```
 
-> **참고**: `purpose` 대신 `description`을 사용합니다. SQL의 목적과 기능을 포괄적으로 설명하는 데 더 자연스러운 표현입니다.
 
 ### 6.2 검증/리뷰
 
@@ -333,7 +321,6 @@ flowchart LR
 
 - meta_json을 특정 스키마로 텍스트 풀어쓴 후 임베딩 생성.
 - Milvus Main 컬렉션에 upsert(template_id, meta_vector, meta_json…).
-- 필요한 경우 템플릿 중요도(실행 빈도, 최근 사용 등)를 score로 별도 저장해 re-ranking에 활용.
 
 ### 7.2 Text2SQL 에이전트에서의 사용
 
@@ -343,7 +330,7 @@ flowchart LR
    - 어떤 테이블이 어떤 목적으로 사용되는지,
    - 어떤 조인 패턴이 일반적인지,
    - 어떤 도메인 규칙(예: 다운 조건, 기본 AREA)이 있는지 반영.
-4. 필요시 ES/RDB에서 원본 SQL 템플릿과 대표 실행 로그를 추가로 검색해 few-shot 예시로 제공.
+4. 필요시 Oracle RDB에서 원본 SQL 템플릿과 대표 실행 로그를 추가로 검색해 few-shot 예시로 제공.
 
 ---
 
