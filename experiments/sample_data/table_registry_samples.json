@@ -1,0 +1,52 @@
+[
+  {
+    "table_name": "MES_EQUIP_STAT",
+    "schema_name": "MES",
+    "system_comment": null,
+    "sql_count": 1523,
+    "first_seen_at": "2025-06-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
+    "table_name": "MES_LOT_HIS",
+    "schema_name": "MES",
+    "system_comment": "LOT",
+    "sql_count": 2341,
+    "first_seen_at": "2025-06-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
+    "table_name": "MES_PROC_MST",
+    "schema_name": "MES",
+    "system_comment": "공정",
+    "sql_count": 1892,
+    "first_seen_at": "2025-06-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
+    "table_name": "MES_WFR_BIN",
+    "schema_name": "MES",
+    "system_comment": "WFR BIN 테이블",
+    "sql_count": 987,
+    "first_seen_at": "2025-08-15T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
+    "table_name": "MES_DEF_HIS",
+    "schema_name": "MES",
+    "system_comment": null,
+    "sql_count": 756,
+    "first_seen_at": "2025-07-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  }
+]

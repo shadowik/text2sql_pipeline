@@ -1,0 +1,90 @@
+{
+  "MES_EQUIP_STAT": {
+    "sample_sqls": [
+      "SELECT EQUIP_ID, STAT_CD, STAT_TYP, START_DT, END_DT FROM MES_EQUIP_STAT WHERE STAT_TYP = 'Down' AND START_DT > SYSDATE - 7",
+      "SELECT E.EQUIP_ID, E.EQP_NAME, S.STAT_CD, S.START_DT, S.END_DT FROM MES_EQUIP E JOIN MES_EQUIP_STAT S ON E.EQUIP_ID = S.EQUIP_ID WHERE S.STAT_CD = 'DOWN'",
+      "SELECT EQUIP_ID, STAT_CD, SUM(DURATION_MIN) as TOTAL_DURATION FROM MES_EQUIP_STAT WHERE START_DT >= TRUNC(SYSDATE, 'MM') GROUP BY EQUIP_ID, STAT_CD ORDER BY TOTAL_DURATION DESC",
+      "SELECT EQUIP_ID, COUNT(*) as DOWN_CNT, AVG(DURATION_MIN) as AVG_DOWN_TIME FROM MES_EQUIP_STAT WHERE STAT_TYP = 'Down' AND START_DT >= TO_DATE('2026-01-01', 'YYYY-MM-DD') GROUP BY EQUIP_ID HAVING COUNT(*) > 5"
+    ],
+    "join_patterns": [
+      {"target_table": "MES_EQUIP", "join_column": "EQUIP_ID", "join_count": 312},
+      {"target_table": "MES_LOT_HIS", "join_column": "EQUIP_ID", "join_count": 156}
+    ],
+    "where_patterns": [
+      {"condition": "STAT_TYP = 'Down'", "count": 234},
+      {"condition": "STAT_CD = 'DOWN'", "count": 189},
+      {"condition": "START_DT > SYSDATE - 7", "count": 156},
+      {"condition": "STAT_CD IN ('DOWN', 'PM')", "count": 89}
+    ]
+  },
+  "MES_LOT_HIS": {
+    "sample_sqls": [
+      "SELECT LOT_ID, PROC_ID, EQUIP_ID, TRACK_IN_DT, TRACK_OUT_DT, STATUS FROM MES_LOT_HIS WHERE LOT_ID = 'LOT20260108001'",
+      "SELECT L.LOT_ID, L.PROC_ID, P.PROC_NAME, L.TRACK_OUT_DT - L.TRACK_IN_DT as CYCLE_TIME FROM MES_LOT_HIS L INNER JOIN MES_PROC_MST P ON L.PROC_ID = P.PROC_ID WHERE L.STATUS = 'COMPLETE'",
+      "SELECT PROC_ID, COUNT(DISTINCT LOT_ID) as LOT_CNT, AVG((TRACK_OUT_DT - TRACK_IN_DT) * 24 * 60) as AVG_CT_MIN FROM MES_LOT_HIS WHERE TRACK_OUT_DT IS NOT NULL AND TRACK_IN_DT >= SYSDATE - 7 GROUP BY PROC_ID",
+      "SELECT L.LOT_ID, L.EQUIP_ID, E.EQP_NAME, L.STATUS FROM MES_LOT_HIS L LEFT JOIN MES_EQUIP E ON L.EQUIP_ID = E.EQUIP_ID WHERE L.STATUS = 'HOLD'"
+    ],
+    "join_patterns": [
+      {"target_table": "MES_PROC_MST", "join_column": "PROC_ID", "join_count": 456},
+      {"target_table": "MES_EQUIP", "join_column": "EQUIP_ID", "join_count": 389},
+      {"target_table": "MES_LOT_MST", "join_column": "LOT_ID", "join_count": 234}
+    ],
+    "where_patterns": [
+      {"condition": "STATUS = 'COMPLETE'", "count": 345},
+      {"condition": "STATUS = 'HOLD'", "count": 234},
+      {"condition": "TRACK_OUT_DT IS NOT NULL", "count": 189},
+      {"condition": "TRACK_IN_DT >= SYSDATE - 7", "count": 156}
+    ]
+  },
+  "MES_PROC_MST": {
+    "sample_sqls": [
+      "SELECT PROC_ID, PROC_NAME, PROC_TYPE, STEP_SEQ, TARGET_CT FROM MES_PROC_MST WHERE PROC_TYPE = 'FRONT' ORDER BY STEP_SEQ",
+      "SELECT P.PROC_ID, P.PROC_NAME, COUNT(L.LOT_ID) as LOT_CNT FROM MES_PROC_MST P LEFT JOIN MES_LOT_HIS L ON P.PROC_ID = L.PROC_ID GROUP BY P.PROC_ID, P.PROC_NAME",
+      "SELECT PROC_ID, PROC_NAME, TARGET_CT FROM MES_PROC_MST WHERE TARGET_CT > 60 ORDER BY TARGET_CT DESC",
+      "SELECT PROC_TYPE, COUNT(*) as PROC_CNT, AVG(TARGET_CT) as AVG_CT FROM MES_PROC_MST GROUP BY PROC_TYPE"
+    ],
+    "join_patterns": [
+      {"target_table": "MES_LOT_HIS", "join_column": "PROC_ID", "join_count": 567},
+      {"target_table": "MES_EQUIP_PROC", "join_column": "PROC_ID", "join_count": 234}
+    ],
+    "where_patterns": [
+      {"condition": "PROC_TYPE = 'FRONT'", "count": 178},
+      {"condition": "PROC_TYPE = 'BACK'", "count": 134},
+      {"condition": "TARGET_CT > 60", "count": 89}
+    ]
+  },
+  "MES_WFR_BIN": {
+    "sample_sqls": [
+      "SELECT LOT_ID, WAFER_ID, BIN_CODE, GOOD_DIE_CNT, TOTAL_DIE_CNT FROM MES_WFR_BIN WHERE BIN_CODE IN ('PASS', 'FAIL')",
+      "SELECT W.LOT_ID, W.WAFER_ID, W.BIN_CODE, L.PRODUCT_NAME FROM MES_WFR_BIN W INNER JOIN MES_LOT_MST L ON W.LOT_ID = L.LOT_ID WHERE W.BIN_CODE = 'PASS'",
+      "SELECT LOT_ID, SUM(GOOD_DIE_CNT) as TOTAL_GOOD, SUM(TOTAL_DIE_CNT) as TOTAL_DIE, ROUND(SUM(GOOD_DIE_CNT) * 100.0 / SUM(TOTAL_DIE_CNT), 2) as YIELD FROM MES_WFR_BIN GROUP BY LOT_ID",
+      "SELECT BIN_CODE, COUNT(*) as WFR_CNT, AVG(GOOD_DIE_CNT) as AVG_GOOD FROM MES_WFR_BIN WHERE CREATE_DT >= SYSDATE - 7 GROUP BY BIN_CODE"
+    ],
+    "join_patterns": [
+      {"target_table": "MES_LOT_MST", "join_column": "LOT_ID", "join_count": 345},
+      {"target_table": "MES_WFR_MST", "join_column": "LOT_ID, WAFER_ID", "join_count": 189}
+    ],
+    "where_patterns": [
+      {"condition": "BIN_CODE IN ('PASS', 'FAIL')", "count": 234},
+      {"condition": "BIN_CODE = 'PASS'", "count": 189},
+      {"condition": "CREATE_DT >= SYSDATE - 7", "count": 156}
+    ]
+  },
+  "MES_DEF_HIS": {
+    "sample_sqls": [
+      "SELECT LOT_ID, WAFER_ID, DEFECT_CODE, DEFECT_CNT, INSP_DT FROM MES_DEF_HIS WHERE DEFECT_CNT > 0 ORDER BY DEFECT_CNT DESC",
+      "SELECT D.LOT_ID, D.WAFER_ID, D.DEFECT_CODE, L.PRODUCT_NAME FROM MES_DEF_HIS D INNER JOIN MES_LOT_MST L ON D.LOT_ID = L.LOT_ID WHERE D.DEFECT_CODE = 'PARTICLE'",
+      "SELECT DEFECT_CODE, COUNT(*) as DEF_CNT, SUM(DEFECT_CNT) as TOTAL_DEFECTS FROM MES_DEF_HIS WHERE INSP_DT >= SYSDATE - 30 GROUP BY DEFECT_CODE ORDER BY TOTAL_DEFECTS DESC",
+      "SELECT LOT_ID, COUNT(DISTINCT DEFECT_CODE) as DEFECT_TYPES, SUM(DEFECT_CNT) as TOTAL_CNT FROM MES_DEF_HIS GROUP BY LOT_ID HAVING SUM(DEFECT_CNT) > 100"
+    ],
+    "join_patterns": [
+      {"target_table": "MES_LOT_MST", "join_column": "LOT_ID", "join_count": 234},
+      {"target_table": "MES_WFR_MST", "join_column": "LOT_ID, WAFER_ID", "join_count": 156}
+    ],
+    "where_patterns": [
+      {"condition": "DEFECT_CNT > 0", "count": 178},
+      {"condition": "DEFECT_CODE = 'PARTICLE'", "count": 134},
+      {"condition": "INSP_DT >= SYSDATE - 30", "count": 112}
+    ]
+  }
+}
