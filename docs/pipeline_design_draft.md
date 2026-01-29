@@ -1,7 +1,7 @@
 # LLM/RAG 기반 Text2SQL 메타데이터 파이프라인 설계서
 
-> **문서 버전**: v0.2 (Draft)  
-> **최종 수정**: 2026-01-27
+> **문서 버전**: v0.3 (Draft)  
+> **최종 수정**: 2026-01-29
 
 ---
 
@@ -11,6 +11,12 @@
 2. [전체 아키텍처](#2-전체-아키텍처)
 3. [데이터 모델 설계](#3-데이터-모델-설계)
 4. [테이블 메타데이터 관리 전략](#4-테이블-메타데이터-관리-전략)
+   - 4.1 [설계 원칙](#41-설계-원칙)
+   - 4.2 [테이블 등록 흐름](#42-테이블-등록-흐름)
+   - 4.3 [처리 시점](#43-처리-시점)
+   - 4.4 [table_registry 스키마](#44-table_registry-스키마)
+   - 4.5 [column_registry 스키마](#45-column_registry-스키마)
+   - 4.6 [테이블/컬럼 메타데이터 자동 보강 전략](#46-테이블컬럼-메타데이터-자동-보강-전략)
 5. [증분 & Dedup 처리 로직](#5-증분--dedup-처리-로직)
 6. [LLM 메타데이터 생성 파이프라인](#6-llm-메타데이터-생성-파이프라인)
 7. [저장 및 RAG 활용](#7-저장-및-rag-활용)
@@ -26,6 +32,7 @@
 - 중복/유사 SQL 템플릿을 효율적으로 제거하고, **증분만 처리**하는 파이프라인을 구축한다.
 - **Milvus 2.6+** + MinHash LSH + 벡터 임베딩을 활용해 **RAG용 검색 품질**과 **성능**을 동시에 확보한다.
 - 실제 SQL 로그에서 사용된 테이블만을 대상으로 메타데이터를 처리하여 **효율성을 극대화**한다.
+- **테이블/컬럼 메타데이터 보강**: 원본 DB의 코멘트가 누락되거나 불충분한 경우, SQL 로그 분석과 샘플 데이터를 기반으로 LLM이 자동으로 설명을 생성한다.
 
 ---
 
@@ -153,11 +160,12 @@ flowchart LR
 
 ### 3.3 메타/로그 DB (Oracle RDB)
 
-| 테이블 | 주요 필드 |
-|--------|-----------|
-| sql_log | sql_log_id, raw_sql, normalized_template_sql, template_id, user_id, created_at |
-| template_meta | template_id, review_status(자동/검토중/승인), last_reviewer, comments |
-| table_registry | table_name, first_seen_at, last_seen_at, sql_count, meta_status |
+| 테이블 | 주요 필드 | 설명 |
+|--------|-----------|------|
+| sql_log | sql_log_id, raw_sql, normalized_template_sql, template_id, user_id, created_at | SQL 실행 로그 |
+| template_meta | template_id, review_status(자동/검토중/승인), last_reviewer, comments | 템플릿 메타정보 |
+| table_registry | table_name, schema_name, llm_description, system_comment, sql_count, meta_status | 테이블 메타정보 (4.4절 상세) |
+| column_registry | table_name, column_name, llm_description, statistics, usage_context | 컬럼 메타정보 (4.5절 상세) |
 
 ---
 
@@ -169,7 +177,6 @@ flowchart LR
 
 이 접근법의 장점:
 - **효율성**: 수천 개의 테이블 중 실제 사용되는 테이블만 처리
-- **비용 절감**: LLM 호출 비용 최소화
 - **품질 향상**: 실제 사용 패턴 기반의 메타데이터 생성
 
 ### 4.2 테이블 등록 흐름
@@ -202,6 +209,166 @@ flowchart TD
 | sql_count | INT | 사용된 SQL 로그 수 |
 | meta_status | VARCHAR | 메타 생성 상태 (pending/generated/reviewed) |
 | llm_enriched_at | DATETIME | LLM 증강 처리 시각 |
+| system_comment | VARCHAR | 원본 DB의 테이블 코멘트 (있는 경우) |
+| llm_description | TEXT | LLM이 SQL 로그 분석을 통해 생성한 테이블 설명 |
+| description_source | VARCHAR | 설명 출처 (system_comment/llm_generated/manual) |
+| usage_summary | JSON | 사용 패턴 요약 (주 사용 목적, 빈도 등) |
+
+### 4.5 column_registry 스키마
+
+> **목적**: 실제 SQL 로그에서 사용된 컬럼만 추적하고, LLM을 통해 컬럼별 설명 및 통계 정보를 보강한다.
+
+| 필드명 | 타입 | 설명 |
+|--------|------|------|
+| table_name | VARCHAR (PK) | 테이블명 |
+| column_name | VARCHAR (PK) | 컬럼명 |
+| data_type | VARCHAR | 데이터 타입 (VARCHAR, NUMBER, DATE 등) |
+| system_comment | VARCHAR | 원본 DB의 컬럼 코멘트 (있는 경우) |
+| llm_description | TEXT | LLM이 SQL 로그 분석을 통해 생성한 컬럼 설명 |
+| first_seen_at | DATETIME | 최초 사용 시각 |
+| last_seen_at | DATETIME | 마지막 사용 시각 |
+| usage_count | INT | SQL 로그에서 사용된 횟수 |
+| usage_context | JSON | 사용 컨텍스트 (SELECT/WHERE/JOIN/GROUP BY 등) |
+| sample_values | JSON | 샘플 값 목록 (LLM 프롬프트용) |
+| statistics | JSON | 컬럼 통계 정보 (NUMBER 타입: min/max/avg 등) |
+| meta_status | VARCHAR | 메타 생성 상태 (pending/generated/reviewed) |
+| llm_enriched_at | DATETIME | LLM 증강 처리 시각 |
+
+### 4.6 테이블/컬럼 메타데이터 자동 보강 전략
+
+> **문제 인식**: 원본 DB의 테이블/컬럼 코멘트(comment)가 충분히 자세하지 않거나 누락된 경우가 많다. 이를 SQL 로그 분석과 LLM을 통해 자동으로 보강한다.
+
+#### 4.6.1 메타데이터 보강 흐름
+
+```mermaid
+flowchart TD
+    SQL_LOG["SQL 로그 수집"] --> PARSE["테이블/컬럼 파싱"]
+    PARSE --> CHECK_TBL{"테이블 코멘트<br/>존재 여부"}
+    CHECK_TBL -->|"누락/불충분"| ENRICH_TBL["LLM 테이블 설명 생성"]
+    CHECK_TBL -->|"충분"| USE_EXISTING["기존 코멘트 사용"]
+    
+    PARSE --> CHECK_COL{"컬럼 코멘트<br/>존재 여부"}
+    CHECK_COL -->|"누락/불충분"| ENRICH_COL["LLM 컬럼 설명 생성"]
+    CHECK_COL -->|"충분"| USE_COL_EXISTING["기존 코멘트 사용"]
+    
+    ENRICH_TBL --> SAMPLE["샘플 데이터 추출"]
+    ENRICH_COL --> SAMPLE
+    SAMPLE --> LLM_PROMPT["LLM 프롬프트 구성"]
+    LLM_PROMPT --> GENERATE["설명 생성"]
+    GENERATE --> SAVE["Registry 저장"]
+```
+
+#### 4.6.2 LLM 테이블 설명 생성 전략
+
+테이블에 대한 설명이 없거나 불충분한 경우, SQL 로그 분석을 통해 자동으로 설명을 생성한다.
+
+**입력 데이터 구성:**
+
+| 입력 항목 | 설명 | 목적 |
+|-----------|------|------|
+| SQL 로그 샘플 | 해당 테이블이 사용된 대표 SQL N개 | 테이블의 사용 목적/패턴 파악 |
+| 조인 패턴 | 해당 테이블과 자주 조인되는 테이블 목록 | 테이블 간 관계 파악 |
+| WHERE 조건 패턴 | 자주 사용되는 필터 조건들 | 비즈니스 규칙 파악 |
+| 컬럼 목록 | 테이블의 컬럼명 및 타입 | 테이블 구조 이해 |
+| 샘플 데이터 (선택) | N개의 샘플 레코드 | 실제 데이터 패턴 파악 |
+
+**LLM 프롬프트 예시:**
+
+```json
+{
+  "task": "테이블 설명 생성",
+  "table_name": "MES_EQUIP_STAT",
+  "columns": ["EQUIP_ID", "STAT_CD", "STAT_TYP", "START_DT", "END_DT"],
+  "sample_sqls": [
+    "SELECT * FROM MES_EQUIP_STAT WHERE STAT_TYP = 'Down' AND START_DT > SYSDATE - 7",
+    "SELECT E.EQUIP_ID, S.STAT_CD FROM MES_EQUIP E JOIN MES_EQUIP_STAT S ON E.EQUIP_ID = S.EQUIP_ID"
+  ],
+  "join_patterns": ["MES_EQUIP (EQUIP_ID)", "MES_LOT_HIST (EQUIP_ID)"],
+  "sample_data": [
+    {"EQUIP_ID": "EQ001", "STAT_CD": "RUN", "STAT_TYP": "Normal", "START_DT": "2026-01-01"},
+    {"EQUIP_ID": "EQ002", "STAT_CD": "DOWN", "STAT_TYP": "Down", "START_DT": "2026-01-02"}
+  ]
+}
+```
+
+**기대 출력:**
+
+```json
+{
+  "table_description": "장비별 상태 이력을 관리하는 테이블. 장비의 가동/정지/다운 상태와 해당 상태의 시작/종료 시점을 기록하며, MES_EQUIP 테이블의 장비 정보와 연계하여 장비 가동률 분석 및 다운타임 추적에 사용된다.",
+  "primary_use_cases": ["장비 상태 모니터링", "다운타임 분석", "가동률 계산"],
+  "related_domain": "MES/설비관리"
+}
+```
+
+#### 4.6.3 LLM 컬럼 설명 생성 전략
+
+> **핵심 원칙**: 실제 SQL 로그에서 **사용된 컬럼만** 대상으로 설명을 생성한다. 사용되지 않는 컬럼은 리소스 낭비를 방지하기 위해 처리 대상에서 제외한다.
+
+**컬럼별 입력 데이터:**
+
+| 데이터 타입 | 추가 입력 | 설명 |
+|-------------|-----------|------|
+| NUMBER/INTEGER | min, max, avg 값 | 숫자 범위 및 분포 파악 |
+| VARCHAR/CHAR | 샘플 값 N개, distinct count | 코드/명칭 패턴 파악 |
+| DATE/TIMESTAMP | min, max 값, 주요 패턴 | 시간 범위 및 사용 패턴 |
+| 모든 타입 | 사용 컨텍스트 | SELECT/WHERE/JOIN/GROUP BY 사용 빈도 |
+
+**통계 정보 예시 (statistics JSON):**
+
+```json
+{
+  "column_name": "EQUIP_ID",
+  "data_type": "VARCHAR",
+  "sample_values": ["EQ001", "EQ002", "EQ003", "ETCH_01", "PHOTO_05"],
+  "distinct_count": 1523,
+  "null_rate": 0.0,
+  "usage_context": {
+    "select": 245,
+    "where": 180,
+    "join": 312,
+    "group_by": 45
+  }
+}
+```
+
+```json
+{
+  "column_name": "PROCESS_TIME",
+  "data_type": "NUMBER",
+  "statistics": {
+    "min": 0.5,
+    "max": 3600.0,
+    "avg": 125.3,
+    "median": 98.2
+  },
+  "null_rate": 0.02,
+  "usage_context": {
+    "select": 89,
+    "where": 23,
+    "aggregate": 67
+  }
+}
+```
+
+#### 4.6.4 메타데이터 보강 우선순위
+
+| 우선순위 | 대상 | 기준 |
+|----------|------|------|
+| 1 | 고빈도 사용 테이블 | sql_count 상위 20% |
+| 2 | 코멘트 누락 테이블/컬럼 | system_comment IS NULL |
+| 3 | 조인 허브 테이블 | 여러 테이블과 빈번히 조인되는 테이블 |
+| 4 | 고빈도 사용 컬럼 | usage_count 상위 컬럼 |
+| 5 | 저빈도 사용 컬럼 | 나머지 사용된 컬럼 |
+
+#### 4.6.5 품질 관리
+
+| 검증 항목 | 방법 |
+|-----------|------|
+| 자동 검증 | 생성된 설명이 최소 길이 충족, 테이블/컬럼명 정확성 |
+| 일관성 검증 | 관련 테이블 간 설명의 논리적 일관성 |
+| 주기적 갱신 | SQL 로그 패턴 변화 시 설명 재생성 트리거 |
+| 전문가 리뷰 | 고빈도 테이블/컬럼은 도메인 전문가 검토 큐에 등록 |
 
 ---
 
@@ -276,7 +443,6 @@ flowchart LR
 
 - 컨텍스트:
   - **원본 SQL** (정규화 전, 비즈니스 지식 추출용)
-  - 정규화된 template_sql
   - 테이블/컬럼 메타데이터 (실제 사용된 테이블에서 조회)
 - LLM에 요구하는 출력(JSON):
 
@@ -326,11 +492,16 @@ flowchart LR
 
 1. 사용자 질의 → 쿼리 임베딩 생성.
 2. Milvus Main에서 top-k LLM 증강 메타데이터 검색 (description + table_rel_info + domain_knowledges).
-3. 검색 결과를 프롬프트에 포함해 SQL 생성:
-   - 어떤 테이블이 어떤 목적으로 사용되는지,
+3. **테이블/컬럼 메타데이터 조회**:
+   - 관련 테이블의 `llm_description` 및 `usage_summary` 조회
+   - 관련 컬럼의 `llm_description`, `statistics`, `sample_values` 조회
+   - NUMBER 컬럼의 min/max/avg 정보를 통해 값 범위 제약 힌트 제공
+4. 검색 결과를 프롬프트에 포함해 SQL 생성:
+   - 어떤 테이블이 어떤 목적으로 사용되는지 (테이블 설명 활용),
    - 어떤 조인 패턴이 일반적인지,
-   - 어떤 도메인 규칙(예: 다운 조건, 기본 AREA)이 있는지 반영.
-4. 필요시 Oracle RDB에서 원본 SQL 템플릿과 대표 실행 로그를 추가로 검색해 few-shot 예시로 제공.
+   - 어떤 도메인 규칙(예: 다운 조건, 기본 AREA)이 있는지 반영,
+   - 컬럼별 통계 정보를 통한 조건절 값 힌트 제공.
+5. 필요시 Oracle RDB에서 원본 SQL 템플릿과 대표 실행 로그를 추가로 검색해 few-shot 예시로 제공.
 
 ---
 
@@ -380,7 +551,11 @@ flowchart LR
 | 배치 주기 | 증분 처리 주기 | 초기: 1일 1회 → 확장 시 시간 단위 |
 | 증분 내 Dedup | 일일 배치 내 사전 중복 제거 | 50~80% 후보 감소 기대 |
 | 테이블 메타 전략 | 처리 대상 테이블 범위 | 실제 SQL 로그 사용 테이블만 |
-| 모니터링 지표 | 운영 상태 확인 | dedup ratio, 신규 템플릿 수, 신규 테이블 수, LLM 호출 횟수/비용 |
+| 컬럼 메타 전략 | 처리 대상 컬럼 범위 | 실제 SQL 로그에서 사용된 컬럼만 |
+| 테이블/컬럼 샘플링 | LLM 프롬프트용 샘플 데이터 크기 | 테이블당 10~50개 레코드 권장 |
+| 컬럼 통계 | NUMBER 타입 통계 수집 | min, max, avg, median (선택적) |
+| 메타 보강 우선순위 | LLM 처리 대상 선정 | 고빈도 사용 + 코멘트 누락 우선 |
+| 모니터링 지표 | 운영 상태 확인 | dedup ratio, 신규 템플릿 수, 신규 테이블 수, 메타 보강률, LLM 호출 횟수/비용 |
 | 스케일링 | 대용량 대응 | Milvus partition (날짜/도메인별), LSH bands 파라미터 튜닝 |
 
 ---
