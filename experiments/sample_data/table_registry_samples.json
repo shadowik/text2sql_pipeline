@@ -1,5 +1,45 @@
 [
   {
+    "table_name": "MES_EQUIP",
+    "schema_name": "MES",
+    "system_comment": "장비 마스터",
+    "sql_count": 2156,
+    "first_seen_at": "2025-06-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
+    "table_name": "MES_LOT_MST",
+    "schema_name": "MES",
+    "system_comment": "LOT 마스터",
+    "sql_count": 2890,
+    "first_seen_at": "2025-06-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
+    "table_name": "MES_EQUIP_PROC",
+    "schema_name": "MES",
+    "system_comment": "장비-공정 매핑",
+    "sql_count": 876,
+    "first_seen_at": "2025-06-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
+    "table_name": "MES_WFR_MST",
+    "schema_name": "MES",
+    "system_comment": "웨이퍼 마스터",
+    "sql_count": 1234,
+    "first_seen_at": "2025-06-01T00:00:00",
+    "last_seen_at": "2026-01-28T23:59:59",
+    "meta_status": "pending",
+    "description_source": null
+  },
+  {
     "table_name": "MES_EQUIP_STAT",
     "schema_name": "MES",
     "system_comment": null,

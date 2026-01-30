@@ -1,4 +1,332 @@
 {
+  "MES_EQUIP": [
+    {
+      "column_name": "EQUIP_ID",
+      "data_type": "VARCHAR2(30)",
+      "system_comment": "장비ID",
+      "sample_values": ["EQ001", "EQ002", "ETCH_01", "PHOTO_05", "CVD_003"],
+      "statistics": {
+        "distinct_count": 1523,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 456,
+        "where": 312,
+        "join": 589,
+        "group_by": 78
+      }
+    },
+    {
+      "column_name": "EQP_NAME",
+      "data_type": "VARCHAR2(100)",
+      "system_comment": "장비명",
+      "sample_values": ["Photo Scanner #1", "Dry Etcher #2", "CVD Chamber #3"],
+      "statistics": {
+        "distinct_count": 1523,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 567,
+        "where": 89,
+        "join": 0,
+        "group_by": 34
+      }
+    },
+    {
+      "column_name": "EQUIP_TYPE",
+      "data_type": "VARCHAR2(20)",
+      "system_comment": "장비유형",
+      "sample_values": ["PHOTO", "ETCH", "CVD", "IMP", "CMP"],
+      "statistics": {
+        "distinct_count": 15,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 234,
+        "where": 178,
+        "join": 0,
+        "group_by": 89
+      }
+    },
+    {
+      "column_name": "AREA_CD",
+      "data_type": "VARCHAR2(10)",
+      "system_comment": "구역코드",
+      "sample_values": ["FAB1", "FAB2", "FAB3", "TEST"],
+      "statistics": {
+        "distinct_count": 8,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 189,
+        "where": 234,
+        "join": 0,
+        "group_by": 67
+      }
+    },
+    {
+      "column_name": "STATUS",
+      "data_type": "VARCHAR2(10)",
+      "system_comment": "상태",
+      "sample_values": ["ACTIVE", "INACTIVE", "PM", "RETIRED"],
+      "statistics": {
+        "distinct_count": 4,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 345,
+        "where": 456,
+        "join": 0,
+        "group_by": 56
+      }
+    },
+    {
+      "column_name": "INSTALL_DT",
+      "data_type": "DATE",
+      "system_comment": "설치일",
+      "sample_values": ["2020-01-15", "2021-06-20", "2022-03-10"],
+      "statistics": {
+        "min": "2015-01-01",
+        "max": "2025-12-31"
+      },
+      "usage_context": {
+        "select": 123,
+        "where": 67,
+        "join": 0,
+        "group_by": 12
+      }
+    }
+  ],
+  "MES_LOT_MST": [
+    {
+      "column_name": "LOT_ID",
+      "data_type": "VARCHAR2(20)",
+      "system_comment": "LOT ID",
+      "sample_values": ["LOT20260101001", "LOT20260101002", "LOT20260102001"],
+      "statistics": {
+        "distinct_count": 45230,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 567,
+        "where": 456,
+        "join": 890,
+        "group_by": 178
+      }
+    },
+    {
+      "column_name": "PRODUCT_NAME",
+      "data_type": "VARCHAR2(50)",
+      "system_comment": "제품명",
+      "sample_values": ["Product_A", "Product_B", "Memory_X1", "Logic_Y2"],
+      "statistics": {
+        "distinct_count": 45,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 456,
+        "where": 234,
+        "join": 0,
+        "group_by": 189
+      }
+    },
+    {
+      "column_name": "PRODUCT_ID",
+      "data_type": "VARCHAR2(20)",
+      "system_comment": "제품ID",
+      "sample_values": ["PROD_A01", "PROD_B02", "PROD_X1", "PROD_Y2"],
+      "statistics": {
+        "distinct_count": 45,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 345,
+        "where": 189,
+        "join": 56,
+        "group_by": 78
+      }
+    },
+    {
+      "column_name": "LOT_STATUS",
+      "data_type": "VARCHAR2(10)",
+      "system_comment": "LOT상태",
+      "sample_values": ["RUN", "HOLD", "COMPLETE", "SCRAPPED"],
+      "statistics": {
+        "distinct_count": 4,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 456,
+        "where": 567,
+        "join": 0,
+        "group_by": 123
+      }
+    },
+    {
+      "column_name": "CREATE_DT",
+      "data_type": "DATE",
+      "system_comment": "생성일시",
+      "sample_values": ["2026-01-01 08:00:00", "2026-01-02 09:30:00"],
+      "statistics": {
+        "min": "2025-01-01",
+        "max": "2026-01-28"
+      },
+      "usage_context": {
+        "select": 234,
+        "where": 345,
+        "join": 0,
+        "group_by": 67
+      }
+    },
+    {
+      "column_name": "PRIORITY",
+      "data_type": "VARCHAR2(10)",
+      "system_comment": "우선순위",
+      "sample_values": ["HIGH", "NORMAL", "LOW", "URGENT"],
+      "statistics": {
+        "distinct_count": 4,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 189,
+        "where": 234,
+        "join": 0,
+        "order_by": 156
+      }
+    }
+  ],
+  "MES_EQUIP_PROC": [
+    {
+      "column_name": "EQUIP_ID",
+      "data_type": "VARCHAR2(30)",
+      "system_comment": "장비ID",
+      "sample_values": ["EQ001", "EQ002", "ETCH_01", "PHOTO_05"],
+      "statistics": {
+        "distinct_count": 1523,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 234,
+        "where": 156,
+        "join": 289,
+        "group_by": 45
+      }
+    },
+    {
+      "column_name": "PROC_ID",
+      "data_type": "VARCHAR2(20)",
+      "system_comment": "공정ID",
+      "sample_values": ["PHOTO_01", "ETCH_02", "CVD_03", "IMP_04"],
+      "statistics": {
+        "distinct_count": 128,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 267,
+        "where": 189,
+        "join": 345,
+        "group_by": 89
+      }
+    },
+    {
+      "column_name": "IS_MAIN",
+      "data_type": "CHAR(1)",
+      "system_comment": "주장비여부",
+      "sample_values": ["Y", "N"],
+      "statistics": {
+        "distinct_count": 2,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 145,
+        "where": 234,
+        "join": 0,
+        "group_by": 34
+      }
+    },
+    {
+      "column_name": "RECIPE_ID",
+      "data_type": "VARCHAR2(30)",
+      "system_comment": "레시피ID",
+      "sample_values": ["RCP_PHOTO_01", "RCP_ETCH_02", "RCP_CVD_03"],
+      "statistics": {
+        "distinct_count": 456,
+        "null_rate": 0.05
+      },
+      "usage_context": {
+        "select": 178,
+        "where": 89,
+        "join": 34,
+        "group_by": 23
+      }
+    }
+  ],
+  "MES_WFR_MST": [
+    {
+      "column_name": "LOT_ID",
+      "data_type": "VARCHAR2(20)",
+      "system_comment": "LOT ID",
+      "sample_values": ["LOT20260101001", "LOT20260101002"],
+      "statistics": {
+        "distinct_count": 45230,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 345,
+        "where": 267,
+        "join": 456,
+        "group_by": 89
+      }
+    },
+    {
+      "column_name": "WAFER_ID",
+      "data_type": "VARCHAR2(10)",
+      "system_comment": "웨이퍼ID",
+      "sample_values": ["01", "02", "03", "04", "05"],
+      "statistics": {
+        "distinct_count": 25,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 389,
+        "where": 178,
+        "join": 234,
+        "group_by": 67
+      }
+    },
+    {
+      "column_name": "WFR_STATUS",
+      "data_type": "VARCHAR2(10)",
+      "system_comment": "웨이퍼상태",
+      "sample_values": ["GOOD", "HOLD", "SCRAP", "REWORK"],
+      "statistics": {
+        "distinct_count": 4,
+        "null_rate": 0.0
+      },
+      "usage_context": {
+        "select": 267,
+        "where": 345,
+        "join": 0,
+        "group_by": 89
+      }
+    },
+    {
+      "column_name": "CREATE_DT",
+      "data_type": "DATE",
+      "system_comment": "생성일시",
+      "sample_values": ["2026-01-01 08:00:00", "2026-01-02 09:30:00"],
+      "statistics": {
+        "min": "2025-01-01",
+        "max": "2026-01-28"
+      },
+      "usage_context": {
+        "select": 189,
+        "where": 234,
+        "join": 0,
+        "group_by": 45
+      }
+    }
+  ],
   "MES_EQUIP_STAT": [
     {
       "column_name": "EQUIP_ID",
