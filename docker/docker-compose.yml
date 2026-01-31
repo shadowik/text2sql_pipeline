@@ -1,0 +1,132 @@
+version: '3.8'
+
+# =============================================================================
+# Text2SQL 메타데이터 파이프라인 인프라
+# 
+# 주요 요구사항 (pipeline_design_draft.md 기반):
+# - Milvus 2.6+ 필수: MinHash LSH 인덱싱 지원
+# - Dedup 컬렉션: 빠른 근사 중복 탐지 (MinHash LSH)
+# - Main 컬렉션: RAG용 벡터 검색
+# - Oracle RDB: SQL 로그 및 메타데이터 저장
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Milvus Standalone (Vector Database) - v2.6+ 필수
+  # MinHash LSH 인덱싱 지원을 위해 2.6 이상 버전 사용
+  # ---------------------------------------------------------------------------
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.0
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - text2sql-net
+
+  minio:
+    container_name: milvus-minio
+    # Milvus 2.6+ 보안 업데이트 요구사항에 맞는 MinIO 버전
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - text2sql-net
+
+  milvus:
+    container_name: milvus-standalone
+    # Milvus 2.6+ 필수 (MinHash LSH 인덱싱 지원)
+    # pipeline_design_draft.md 요구사항: "Milvus 2.6 이상 필수"
+    image: milvusdb/milvus:v2.6.9
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: minioadmin
+      MINIO_SECRET_ACCESS_KEY: minioadmin
+    volumes:
+      - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"   # gRPC port
+      - "9091:9091"     # HTTP/WebUI port
+    depends_on:
+      - etcd
+      - minio
+    networks:
+      - text2sql-net
+
+  # Attu - Milvus GUI (Milvus 2.6 호환 버전)
+  attu:
+    container_name: milvus-attu
+    image: zilliz/attu:v2.6.4
+    environment:
+      MILVUS_URL: milvus:19530
+    ports:
+      - "8000:3000"
+    depends_on:
+      - milvus
+    networks:
+      - text2sql-net
+
+  # Oracle Free 23ai (ARM64/M1 네이티브 지원)
+  oracle:
+    container_name: oracle-xe
+    image: gvenzl/oracle-free:23.5-slim
+    shm_size: '2gb'
+    environment:
+      ORACLE_PASSWORD: oracle123
+      APP_USER: text2sql
+      APP_USER_PASSWORD: text2sql123
+    ports:
+      - "1521:1521"
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+    networks:
+      - text2sql-net
+
+volumes:
+  etcd_data:
+  minio_data:
+  milvus_data:
+  oracle_data:
+
+networks:
+  text2sql-net:
+    driver: bridge
+
